@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+/android/
+*.log
+.env
+__pycache__/
+.pytest_cache/
+.venv/
+backend/*.egg-info/
+output/android/*.apk
+output/qa/

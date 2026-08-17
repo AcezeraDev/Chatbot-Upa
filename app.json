@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "UPA Agora",
+    "slug": "upa-agora",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.upaagora.demonstracao",
+      "versionCode": 1
+    },
+    "ios": {
+      "bundleIdentifier": "com.upaagora.demonstracao",
+      "supportsTablet": true
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-status-bar",
+      "expo-font"
+    ]
+  }
+}
