@@ -158,8 +158,23 @@ segurança. A precisão da resposta reflete o que dá para saber:
 | `openingPrecision` | Quando | O que significa |
 |---|---|---|
 | `exata` | Atendimento contínuo de 24 horas (84%) | Certeza, não há o que estimar |
-| `estimada` | Atende por turnos | O CNES diz "manhã, tarde e noite" sem informar horários; nós supomos 7h–12h, 12h–18h e 18h–23h |
-| `desconhecida` | Turnos intermitentes ou campo vazio | `openNow` vem `null`; não afirmamos nada |
+| `estimada` | Atende por turnos, em dia de semana | Faixas derivadas de horários oficiais: manhã 07h–12h, tarde 12h–19h, noite 19h–22h |
+| `desconhecida` | Turnos intermitentes, campo vazio, ou dentro do horário num fim de semana | `openNow` vem `null`; não afirmamos nada |
+
+As faixas não são convenção nossa. Somadas, reproduzem os horários publicados:
+manhã+tarde dá **07h–19h**, o padrão de 12 horas contínuas do [Programa Saúde na
+Hora](https://www.gov.br/saude/pt-br/composicao/saps/saude-na-hora) ([Portaria nº
+397/GM/MS de 2020](https://bvsms.saude.gov.br/bvs/saudelegis/gm/2020/prt0397_16_03_2020.html))
+e das [AMAs de São Paulo](https://prefeitura.sp.gov.br/web/saude/w/atencao_basica/ama/1911);
+somando a noite dá **07h–22h**, o formato praticado no Distrito Federal.
+
+Sobre os dias da semana: a descrição do CNES para atendimento contínuo diz
+"inclui sábados, domingos e feriados", e só ela diz isso. O Saúde na Hora exige
+segunda a sexta, com fim de semana só em parte dos formatos, e as AMAs abrem de
+segunda a sábado. Dia de semana é garantido, fim de semana varia por unidade e o
+cadastro não distingue — então, dentro do horário e em fim de semana, a resposta
+é `null`. Fora do horário a unidade está fechada em qualquer dia, porque nenhum
+formato de turno abre de madrugada.
 
 O cálculo usa o fuso do estado da unidade, não um fuso único: o Brasil tem
 quatro, e o Acre está três horas atrás de São Paulo — justamente onde há menos

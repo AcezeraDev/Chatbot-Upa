@@ -9,10 +9,35 @@ O campo `descricao_turno_atendimento` parece texto livre, mas em 2061 unidades
 há apenas 7 valores distintos. É vocabulário fechado, e por isso dá para
 classificá-lo com segurança.
 
-O que **não** dá para saber: o CNES informa "manhã, tarde e noite" sem dizer
-que horas isso significa. As faixas abaixo são convenção nossa, não dado — por
-isso essas unidades saem com precisão "estimada", e só as de 24 horas saem como
-"exata".
+O que o CNES **não** informa é que horas cada turno significa, nem em que dias
+a unidade abre. As faixas abaixo vêm de horários oficiais publicados, não de
+suposição nossa:
+
+- **07h–19h** é o padrão de 12 horas contínuas do Programa Saúde na Hora
+  (Portaria nº 397/GM/MS de 2020) e das AMAs de São Paulo. Corresponde a
+  "manhã e tarde".
+- **07h–22h** é o formato praticado no Distrito Federal para as unidades que
+  atendem também à noite. Corresponde a "manhã, tarde e noite".
+
+Compondo os turnos com as faixas abaixo, manhã+tarde fecha exatamente em 07h–19h
+e manhã+tarde+noite em 07h–22h — os dois padrões documentados.
+
+Sobre os dias: a própria descrição do CNES para atendimento contínuo diz
+"inclui sábados, domingos e feriados", e só ela diz isso. O Saúde na Hora exige
+segunda a sexta, com sábado ou domingo apenas em parte dos formatos, e as AMAs
+paulistanas abrem de segunda a sábado. Ou seja, dia de semana é garantido e
+fim de semana varia por unidade — o que o cadastro não permite distinguir.
+Por isso, dentro do horário e em fim de semana, a resposta é "não sei" em vez
+de um palpite: dizer "fechada" mandaria a pessoa para longe de uma unidade que
+pode estar aberta.
+
+Fontes:
+- Programa Saúde na Hora, Ministério da Saúde:
+  https://www.gov.br/saude/pt-br/composicao/saps/saude-na-hora
+- Portaria nº 397/GM/MS, de 16 de março de 2020:
+  https://bvsms.saude.gov.br/bvs/saudelegis/gm/2020/prt0397_16_03_2020.html
+- AMA, Prefeitura de São Paulo:
+  https://prefeitura.sp.gov.br/web/saude/w/atencao_basica/ama/1911
 """
 
 from __future__ import annotations
@@ -34,10 +59,14 @@ _FUSO_POR_UF = {
 }
 _FUSO_PADRAO = "America/Sao_Paulo"
 
-# Convenção nossa para os turnos, não informação do CNES. Ver o cabeçalho.
+# Faixas derivadas dos horários oficiais citados no cabeçalho: manhã+tarde
+# resulta em 07h–19h e os três turnos em 07h–22h.
 MANHA = (time(7, 0), time(12, 0))
-TARDE = (time(12, 0), time(18, 0))
-NOITE = (time(18, 0), time(23, 0))
+TARDE = (time(12, 0), time(19, 0))
+NOITE = (time(19, 0), time(22, 0))
+
+SABADO = 5
+DOMINGO = 6
 
 
 def _normalizar(valor: str) -> str:
@@ -94,9 +123,10 @@ def open_now(
     Devolve (aberta, precisão), onde precisão é:
 
     - "exata": atendimento contínuo de 24 horas, não há o que estimar.
-    - "estimada": a unidade atende por turnos e nós supomos os horários.
-    - "desconhecida": turnos intermitentes ou campo vazio — não afirmamos nada,
-      e `aberta` vem como None.
+    - "estimada": a unidade atende por turnos e a resposta vem das faixas
+      oficiais documentadas no cabeçalho.
+    - "desconhecida": turnos intermitentes, campo vazio, ou dentro do horário
+      num fim de semana — casos em que `aberta` vem como None.
     """
     tipo = classify(descricao)
 
@@ -110,6 +140,18 @@ def open_now(
     if not faixas:
         return None, "desconhecida"
 
-    momento = (agora or now_in(uf_sigla)).time()
-    aberta = any(inicio <= momento < fim for inicio, fim in faixas)
-    return aberta, "estimada"
+    momento = agora or now_in(uf_sigla)
+    dentro_do_horario = any(inicio <= momento.time() < fim for inicio, fim in faixas)
+
+    # Fora do horário está fechada em qualquer dia: nenhum formato de turno
+    # abre de madrugada. Dentro do horário, o dia decide.
+    if not dentro_do_horario:
+        return False, "estimada"
+
+    if momento.weekday() in (SABADO, DOMINGO):
+        # Parte das unidades de turno abre no fim de semana e parte não, e o
+        # cadastro não distingue. Afirmar "fechada" mandaria a pessoa para
+        # longe de uma unidade que pode estar atendendo.
+        return None, "desconhecida"
+
+    return True, "estimada"
