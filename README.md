@@ -39,7 +39,29 @@ A heurística está em `backend/app/cnes.py` (`detect_unreliable_coordinates`) e
 pode gerar falso positivo em região central densa — o aviso à toa é preferível
 ao erro silencioso.
 
-## Rodar o backend
+## O backend em produção
+
+**https://backend-roan-five-70.vercel.app**
+
+Não é preciso instalar nada para usá-lo: o aplicativo aponta para esse endereço
+e funciona em qualquer rede. A página inicial explica o serviço em português e
+permite consultá-lo ao vivo; `/docs` traz a referência técnica.
+
+Endpoints:
+
+| Rota | O que faz |
+|------|-----------|
+| `GET /` | Página inicial, em português, com consulta ao vivo |
+| `GET /health` | Verificação de saúde |
+| `GET /api/meta` | Quantos estados e unidades o cadastro tem, e quando foi gerado |
+| `GET /api/ufs` | Estados, para o seletor manual |
+| `GET /api/upas?uf=SP` | Unidades do estado, em ordem alfabética |
+| `GET /api/upas/nearby?lat=&lon=&uf=SP` | Unidades mais próximas, com distância |
+| `POST /api/chat` | Assistente determinístico |
+
+## Rodar o backend na sua máquina
+
+Só é necessário para desenvolver. Requer Python 3.11+.
 
 ```powershell
 cd backend
@@ -48,31 +70,32 @@ python -m venv .venv
 .venv\Scripts\python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-A primeira consulta a um estado baixa o cadastro do CNES (paginado de 20 em 20,
-em ondas concorrentes) e guarda em `backend/.cache/` por 24 horas. As consultas
-seguintes respondem em milissegundos.
+Não há download de dados na primeira execução: o cadastro do CNES vem no
+repositório, em `backend/data/cnes/` (27 estados, 2061 unidades). Isso existe
+porque em ambiente serverless não há disco persistente — o cache gravável nasce
+vazio a cada partida e baixar um estado inteiro dentro da requisição seria lento
+demais. A ordem de leitura é memória, cache gravável, cadastro embarcado e, só
+então, busca ao vivo no CNES.
 
-Endpoints:
+Para atualizar o cadastro (o CNES publica mensalmente), rode antes do deploy:
 
-| Rota | O que faz |
-|------|-----------|
-| `GET /health` | Verificação de saúde |
-| `GET /api/ufs` | Estados, para o seletor manual |
-| `GET /api/upas?uf=SP` | Unidades do estado, em ordem alfabética |
-| `GET /api/upas/nearby?lat=&lon=&uf=SP` | Unidades mais próximas, com distância |
-| `POST /api/chat` | Assistente determinístico |
+```powershell
+cd backend
+.venv\Scripts\python scripts/build_cnes_seed.py
+```
 
 ## Rodar o app
 
-O endereço do backend vem do arquivo `.env` (copie de `.env.example`):
+O endereço do backend vem do arquivo `.env` (copie de `.env.example`, que já
+aponta para produção — assim o app funciona sem subir nada localmente):
 
 ```bash
-EXPO_PUBLIC_API_URL=http://127.0.0.1:8000
+EXPO_PUBLIC_API_URL=https://backend-roan-five-70.vercel.app
 ```
 
-Para testar no celular, troque `127.0.0.1` pelo IP do computador na rede local.
-Depois de alterar o `.env`, rode com `--clear` — o Metro embute o valor em tempo
-de build e mantém cache:
+Para falar com um backend local, troque pelo endereço da sua máquina. Depois de
+alterar o `.env`, rode com `--clear` — o Metro embute o valor em tempo de build
+e mantém cache:
 
 ```bash
 npm run web -- --clear
@@ -81,6 +104,37 @@ npm run web -- --clear
 No navegador, o app pede a permissão de localização mas não consegue descobrir o
 estado (o geocoding reverso não existe na web). Ele mostra o seletor de estado, e
 a distância passa a ser calculada normalmente depois da escolha.
+
+## Gerar o APK Android
+
+```powershell
+cd android
+.\gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+```
+
+O APK sai em `android/app/build/outputs/apk/release/`, com cerca de 29 MB.
+
+Duas exigências do ambiente, ambas descobertas do jeito difícil:
+
+**Use JDK 17 ou 21, não a JBR do Android Studio.** A JBR atual é JDK 25, e a
+partir do JDK 24 a JVM imprime `WARNING: A restricted method in
+java.lang.System has been called` no stderr. O plugin Android trata isso como
+erro fatal no passo do Prefab e o build morre com uma mensagem que não explica
+nada.
+
+**Não construa dentro de pasta sincronizada (OneDrive, Dropbox).** O
+sincronizador transforma arquivos de build em placeholders de nuvem e mantém
+handles abertos, o que produz `not a regular file`, `Unable to delete
+directory` e `AccessDeniedException` em pontos aleatórios. Redirecionar o
+diretório de build por init script do Gradle não resolve: os `CMakeLists.txt`
+dos módulos nativos do React Native têm `../../../build/generated/...` escrito
+na mão e o codegen deixa de ser encontrado. A única saída é construir fora da
+pasta sincronizada.
+
+O `-PreactNativeArchitectures=arm64-v8a` restringe a compilação nativa a uma
+arquitetura em vez de quatro, o que corta o tempo de build em cerca de 4x. Cobre
+qualquer aparelho de 2016 em diante, mas não roda em emulador x86 — remova o
+parâmetro se precisar de um APK universal.
 
 ## Testes
 
