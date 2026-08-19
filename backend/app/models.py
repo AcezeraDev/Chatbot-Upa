@@ -50,7 +50,9 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    kind: Literal["nearest", "list", "emergency", "unavailable", "help"] = "help"
+    # "assistant" identifica resposta redigida pelo modelo de linguagem; os
+    # demais vêm de regra fixa. O app usa isso para destacar avisos.
+    kind: Literal["nearest", "list", "emergency", "unavailable", "help", "assistant"] = "help"
 
 
 class HealthResponse(BaseModel):

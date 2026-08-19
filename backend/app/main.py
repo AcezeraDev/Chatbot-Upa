@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .cnes import CnesUnavailableError, seed_metadata
-from .domain import create_chat_reply
+from .assistant import reply_to
 from .models import ChatRequest, ChatResponse, HealthResponse, Upa, UF
 from .repository import DEFAULT_RESULT_LIMIT, find_nearby, list_upas
 from .ufs import UFS, resolve_uf
@@ -107,14 +107,20 @@ def get_nearby(
 
 @app.post("/api/chat", response_model=ChatResponse, tags=["chat"])
 def chat(payload: ChatRequest) -> ChatResponse:
-    units: list[Upa] = []
+    """Assistente.
 
+    A triagem de emergencia e as consultas ao cadastro ficam em assistant.py,
+    que decide entre o modelo de linguagem e a regra fixa. Aqui so validamos a
+    UF, para que uma sigla errada continue devolvendo 400 em vez de virar
+    conversa.
+    """
     if payload.uf:
-        uf_code = _uf_code_or_400(payload.uf)
-        if payload.latitude is not None and payload.longitude is not None:
-            units = _guard_cnes(find_nearby, payload.latitude, payload.longitude, uf_code, 5)
-        else:
-            units = _guard_cnes(list_upas, uf_code)[:5]
+        _uf_code_or_400(payload.uf)
 
-    reply, kind = create_chat_reply(payload.message, units)
+    reply, kind = reply_to(
+        payload.message,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        uf=payload.uf,
+    )
     return ChatResponse(reply=reply, kind=kind)

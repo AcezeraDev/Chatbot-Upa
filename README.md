@@ -105,6 +105,41 @@ No navegador, o app pede a permissão de localização mas não consegue descobr
 estado (o geocoding reverso não existe na web). Ele mostra o seletor de estado, e
 a distância passa a ser calculada normalmente depois da escolha.
 
+## Ligar o assistente com modelo de linguagem
+
+O assistente funciona sem nenhuma configuração, respondendo por regras fixas.
+Para que ele converse, defina uma chave do Google Gemini
+([obtenha em aistudio.google.com/apikey](https://aistudio.google.com/apikey)):
+
+```powershell
+$env:GEMINI_API_KEY = "sua-chave"
+```
+
+Em produção, no Vercel, adicione a variável em Settings → Environment Variables
+e faça um novo deploy. O modelo padrão é `gemini-3.7-flash`; para trocar, defina
+`GEMINI_MODEL`.
+
+Três garantias estruturam `app/assistant.py`, e vale conhecê-las antes de mexer:
+
+**A triagem de emergência nunca passa pelo modelo.** Diante de sinal de risco à
+vida, a resposta é 192/SAMU, vinda de `domain.py`, por regra fixa e auditável.
+Um modelo pode suavizar o alerta ou falhar em reconhecê-lo, e numa urgência a
+demora é o dano.
+
+**O modelo não conhece nenhuma unidade.** Ele só obtém unidades chamando a
+ferramenta `buscar_unidades_proximas`, que consulta o cadastro real, e redige em
+cima do que voltou. As coordenadas vêm da requisição, nunca do modelo. Sem essa
+amarra, um modelo de linguagem inventa nome, endereço e telefone plausíveis — o
+pior erro possível neste aplicativo.
+
+**Falha do modelo não derruba o serviço.** Chave inválida, cota esgotada, rede
+fora ou formato inesperado caem na resposta determinística. Quem perguntou
+recebe algo correto em vez de um erro.
+
+Custo, para dimensionar: o `gemini-3.7-flash` custa US$ 0,75 por milhão de
+tokens de entrada e US$ 3,75 de saída até 31/12/2026, dobrando depois. Há também
+um nível gratuito, com limite de requisições.
+
 ## Gerar o APK Android
 
 ```powershell
