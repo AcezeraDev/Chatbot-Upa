@@ -140,6 +140,24 @@ Custo, para dimensionar: o `gemini-3.7-flash` custa US$ 0,75 por milhão de
 tokens de entrada e US$ 3,75 de saída até 31/12/2026, dobrando depois. Há também
 um nível gratuito, com limite de requisições.
 
+## Limite de requisições
+
+A API é pública e sem autenticação. Cada IP tem, por minuto, 120 requisições
+nos endpoints de leitura e 10 no `/api/chat` — o assistente é o caro, porque
+cada mensagem pode virar uma chamada paga ao modelo. Passado o teto a resposta
+é `429` com `Retry-After`. O `/health` e a página inicial não são limitados,
+para não bloquear monitoramento nem a própria página.
+
+Os tetos são ajustáveis por variável de ambiente: `RATE_LIMIT_READ`,
+`RATE_LIMIT_CHAT` e `RATE_LIMIT_WINDOW`.
+
+**O que este limite não é.** A contagem vive na memória do processo, e em
+serverless há várias instâncias que não se conversam — então o teto real é por
+instância e zera a cada partida fria. Isso barra laço acidental e abuso
+ingênuo, que é o risco concreto aqui, mas não é defesa contra ataque
+distribuído. Para um teto global seria preciso armazenamento compartilhado
+(Redis, Vercel KV) ou o firewall da plataforma.
+
 ## Gerar o APK Android
 
 ```powershell

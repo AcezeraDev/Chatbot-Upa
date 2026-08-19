@@ -2,12 +2,13 @@ import os
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .cnes import CnesUnavailableError, seed_metadata
 from .assistant import reply_to
+from .ratelimit import limit_chat, limit_read
 from .models import ChatRequest, ChatResponse, HealthResponse, Upa, UF
 from .repository import DEFAULT_RESULT_LIMIT, find_nearby, list_upas
 from .ufs import UFS, resolve_uf
@@ -72,7 +73,7 @@ def home() -> HTMLResponse:
     return HTMLResponse(HOME_PAGE.read_text(encoding="utf-8"))
 
 
-@app.get("/api/meta", tags=["system"])
+@app.get("/api/meta", tags=["system"], dependencies=[Depends(limit_read)])
 def meta() -> dict:
     """Quantos estados e unidades o cadastro embarcado tem, e quando foi gerado."""
     return seed_metadata()
@@ -83,18 +84,18 @@ def health() -> HealthResponse:
     return HealthResponse()
 
 
-@app.get("/api/ufs", response_model=list[UF], tags=["locations"])
+@app.get("/api/ufs", response_model=list[UF], tags=["locations"], dependencies=[Depends(limit_read)])
 def get_ufs() -> list[UF]:
     """Estados disponíveis, usados pelo seletor manual do aplicativo."""
     return list(UFS)
 
 
-@app.get("/api/upas", response_model=list[Upa], tags=["locations"])
+@app.get("/api/upas", response_model=list[Upa], tags=["locations"], dependencies=[Depends(limit_read)])
 def get_upas(uf: str = Query(description="Sigla ou nome do estado, ex.: SP")) -> list[Upa]:
     return _guard_cnes(list_upas, _uf_code_or_400(uf))
 
 
-@app.get("/api/upas/nearby", response_model=list[Upa], tags=["locations"])
+@app.get("/api/upas/nearby", response_model=list[Upa], tags=["locations"], dependencies=[Depends(limit_read)])
 def get_nearby(
     lat: float = Query(ge=-90, le=90),
     lon: float = Query(ge=-180, le=180),
@@ -105,7 +106,7 @@ def get_nearby(
     return _guard_cnes(find_nearby, lat, lon, _uf_code_or_400(uf), limit)
 
 
-@app.post("/api/chat", response_model=ChatResponse, tags=["chat"])
+@app.post("/api/chat", response_model=ChatResponse, tags=["chat"], dependencies=[Depends(limit_chat)])
 def chat(payload: ChatRequest) -> ChatResponse:
     """Assistente.
 
