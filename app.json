@@ -6,19 +6,33 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
+      "usesCleartextTraffic": true,
       "package": "com.upaagora.demonstracao",
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.upaagora.demonstracao",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "O UPA Agora usa sua localização apenas para ordenar as unidades de pronto atendimento pela distância. Nada é armazenado."
+      }
     },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
       "expo-status-bar",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "O UPA Agora usa sua localização apenas para ordenar as unidades de pronto atendimento pela distância. Nada é armazenado."
+        }
+      ]
     ]
   }
 }

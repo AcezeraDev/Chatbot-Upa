@@ -1,22 +1,13 @@
-import { createDemoUpas } from '../data/demo';
-import type { DataSource, Upa } from '../types';
+import type { ChatKind, Coordinates, UF, Upa } from '../types';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
-const REQUEST_TIMEOUT_MS = 3000;
+const REQUEST_TIMEOUT_MS = 15000;
 
-type UpaResult = {
-  data: Upa[];
-  source: DataSource;
-};
-
-type ChatResult = {
-  reply: string;
-  source: DataSource;
-};
+export class ApiUnavailableError extends Error {}
 
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   if (!API_URL) {
-    throw new Error('API não configurada');
+    throw new ApiUnavailableError('EXPO_PUBLIC_API_URL não configurada');
   }
 
   const controller = new AbortController();
@@ -26,70 +17,73 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
     const response = await fetch(`${API_URL}${path}`, {
       ...init,
       signal: controller.signal,
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...init?.headers,
-      },
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...init?.headers },
     });
 
     if (!response.ok) {
-      throw new Error(`Falha na API: ${response.status}`);
+      throw new ApiUnavailableError(`A API respondeu ${response.status}`);
     }
 
     return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof ApiUnavailableError) throw error;
+    throw new ApiUnavailableError('Não foi possível falar com o servidor');
   } finally {
     clearTimeout(timeout);
   }
 };
 
-export const getUpas = async (): Promise<UpaResult> => {
-  try {
-    const data = await requestJson<Upa[]>('/api/upas');
-    return { data, source: 'api' };
-  } catch {
-    return { data: createDemoUpas(), source: 'demo' };
+/**
+ * Valida o formato antes de confiar na resposta. Um payload inesperado
+ * derrubaria a tela ao calcular distâncias, então é melhor tratá-lo como
+ * indisponibilidade do que deixar passar.
+ */
+const parseUnits = (payload: unknown): Upa[] => {
+  if (!Array.isArray(payload)) {
+    throw new ApiUnavailableError('Resposta em formato inesperado');
   }
+
+  return payload.filter((item): item is Upa => {
+    const unit = item as Partial<Upa>;
+    return (
+      typeof unit?.id === 'string' &&
+      typeof unit?.name === 'string' &&
+      typeof unit?.latitude === 'number' &&
+      typeof unit?.longitude === 'number'
+    );
+  });
 };
 
-const normalize = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
+export const getNearbyUpas = async (coords: Coordinates, uf: string): Promise<Upa[]> => {
+  const query = new URLSearchParams({
+    lat: String(coords.latitude),
+    lon: String(coords.longitude),
+    uf,
+    limit: '15',
+  });
 
-const createDemoReply = (message: string): string => {
-  const upas = createDemoUpas();
-  const best = upas[0];
-  const normalized = normalize(message);
-
-  if (!best) {
-    return 'Os dados demonstrativos estão indisponíveis no momento.';
-  }
-
-  if (normalized.includes('todas') || normalized.includes('lista')) {
-    return upas
-      .map((upa) => `${upa.name}: cerca de ${upa.waitMinutes} minutos`)
-      .join('\n');
-  }
-
-  if (normalized.includes('emergencia') || normalized.includes('grave')) {
-    return 'Em uma emergência, não escolha a unidade apenas pelo tempo de espera. Procure atendimento imediato pelos canais oficiais da sua cidade.';
-  }
-
-  return `${best.name} apresenta a menor espera estimada entre as unidades demonstrativas: cerca de ${best.waitMinutes} minutos. Os dados deste protótipo são fictícios.`;
+  return parseUnits(await requestJson<unknown>(`/api/upas/nearby?${query.toString()}`));
 };
 
-export const sendChatMessage = async (message: string): Promise<ChatResult> => {
-  try {
-    const response = await requestJson<{ reply: string }>('/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({ message }),
-    });
-    return { reply: response.reply, source: 'api' };
-  } catch {
-    await new Promise((resolve) => setTimeout(resolve, 650));
-    return { reply: createDemoReply(message), source: 'demo' };
-  }
+export const getUpasByUf = async (uf: string): Promise<Upa[]> =>
+  parseUnits(await requestJson<unknown>(`/api/upas?uf=${encodeURIComponent(uf)}`));
+
+export const getUfs = async (): Promise<UF[]> => {
+  const payload = await requestJson<unknown>('/api/ufs');
+  return Array.isArray(payload) ? (payload as UF[]) : [];
 };
 
+export const sendChatMessage = async (
+  message: string,
+  coords: Coordinates | null,
+  uf: string | null,
+): Promise<{ reply: string; kind: ChatKind }> =>
+  requestJson<{ reply: string; kind: ChatKind }>('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      message,
+      latitude: coords?.latitude ?? null,
+      longitude: coords?.longitude ?? null,
+      uf,
+    }),
+  });

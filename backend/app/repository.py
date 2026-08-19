@@ -1,49 +1,42 @@
-from datetime import UTC, datetime
+"""Consultas de unidades sobre os dados reais do CNES."""
 
+from .cnes import list_units_by_uf
+from .geo import haversine_km
 from .models import Upa
 
 
-_UPAS = (
-    {
-        "id": "upa-centro",
-        "name": "UPA Centro",
-        "neighborhood": "Centro",
-        "address": "Av. Principal, 120",
-        "waitMinutes": 18,
-        "patients": 7,
-        "status": "low",
-        "distanceKm": 2.1,
-    },
-    {
-        "id": "upa-zona-norte",
-        "name": "UPA Zona Norte",
-        "neighborhood": "Jardim Norte",
-        "address": "Rua das Flores, 890",
-        "waitMinutes": 34,
-        "patients": 14,
-        "status": "moderate",
-        "distanceKm": 4.7,
-    },
-    {
-        "id": "upa-zona-sul",
-        "name": "UPA Zona Sul",
-        "neighborhood": "Vila Esperança",
-        "address": "Av. Saúde, 455",
-        "waitMinutes": 56,
-        "patients": 22,
-        "status": "high",
-        "distanceKm": 6.3,
-    },
-)
+DEFAULT_RESULT_LIMIT = 10
+DEFAULT_MAX_DISTANCE_KM = 60.0
 
 
-def list_upas() -> list[Upa]:
-    """Return a fresh, ordered snapshot of the demonstration queue data."""
-    timestamp = datetime.now(UTC).isoformat()
-    return [Upa(**item, lastUpdated=timestamp) for item in _UPAS]
+def list_upas(uf_code: int) -> list[Upa]:
+    """Unidades de uma UF em ordem alfabética."""
+    return sorted(list_units_by_uf(uf_code), key=lambda unit: unit.name)
 
 
-def get_best_upa() -> Upa:
-    """Select the lowest deterministic wait estimate."""
-    return min(list_upas(), key=lambda upa: upa.waitMinutes)
+def find_nearby(
+    latitude: float,
+    longitude: float,
+    uf_code: int,
+    limit: int = DEFAULT_RESULT_LIMIT,
+    max_distance_km: float = DEFAULT_MAX_DISTANCE_KM,
+) -> list[Upa]:
+    """Unidades mais próximas de um ponto, da mais perto para a mais longe."""
+    measured: list[Upa] = []
 
+    for unit in list_units_by_uf(uf_code):
+        distance = haversine_km(latitude, longitude, unit.latitude, unit.longitude)
+        if distance > max_distance_km:
+            continue
+        measured.append(unit.model_copy(update={"distanceKm": round(distance, 1)}))
+
+    # Unidades com coordenada não confiável caem para o fim da lista. A
+    # coordenada errada delas é o centro da cidade, exatamente onde a maioria
+    # das buscas acontece — sem isso elas ocupariam o topo indevidamente.
+    measured.sort(key=lambda unit: (unit.locationPrecision != "exata", unit.distanceKm or 0.0))
+    return measured[:limit]
+
+
+def nearest_reliable(units: list[Upa]) -> Upa | None:
+    """Primeira unidade cuja localização é confiável o bastante para afirmar."""
+    return next((unit for unit in units if unit.locationPrecision == "exata"), None)

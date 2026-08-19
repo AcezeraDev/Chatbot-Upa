@@ -10,3 +10,4 @@ __pycache__/
 backend/*.egg-info/
 output/android/*.apk
 output/qa/
+backend/.cache/

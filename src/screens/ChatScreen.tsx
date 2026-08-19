@@ -1,56 +1,71 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { sendChatMessage } from '../services/api';
 import type { AppTheme } from '../theme';
 import { spacing, typography } from '../theme';
-import type { ChatMessage, DataSource } from '../types';
+import type { ChatMessage, Coordinates, UF } from '../types';
 
 type ChatScreenProps = {
   theme: AppTheme;
-  initialSource: DataSource;
+  coords: Coordinates | null;
+  uf: UF | null;
+  messages: ChatMessage[];
+  onChangeMessages: (updater: (current: ChatMessage[]) => ChatMessage[]) => void;
 };
 
-const initialMessage: ChatMessage = {
-  id: 'welcome',
-  role: 'assistant',
-  text: 'Olá. Posso comparar os tempos demonstrativos das UPAs.',
-  createdAt: new Date().toISOString(),
-};
+const suggestions = ['Qual a unidade mais perto?', 'Mostrar as unidades próximas'];
 
-const suggestions = ['Qual UPA tem menor espera?', 'Mostrar todas as unidades'];
-
-export function ChatScreen({ theme, initialSource }: ChatScreenProps) {
+export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: ChatScreenProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [messages, setMessages] = useState<ChatMessage[]>([initialMessage]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
-  const [source, setSource] = useState<DataSource>(initialSource);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const counter = useRef(0);
+
+  const nextId = (role: string) => {
+    counter.current += 1;
+    return `${role}-${counter.current}`;
+  };
 
   const send = async (preset?: string) => {
     const text = (preset ?? input).trim();
     if (!text || typing) return;
 
     setInput('');
-    setMessages((current) => [
+    onChangeMessages((current) => [
       ...current,
-      { id: `user-${Date.now()}`, role: 'user', text, createdAt: new Date().toISOString() },
+      { id: nextId('user'), role: 'user', text, createdAt: new Date().toISOString() },
     ]);
     setTyping(true);
 
-    const result = await sendChatMessage(text);
-    setSource(result.source);
-    setMessages((current) => [
-      ...current,
-      {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        text: result.reply,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-    setTyping(false);
+    try {
+      const result = await sendChatMessage(text, coords, uf?.sigla ?? null);
+      onChangeMessages((current) => [
+        ...current,
+        {
+          id: nextId('assistant'),
+          role: 'assistant',
+          text: result.reply,
+          createdAt: new Date().toISOString(),
+          kind: result.kind,
+        },
+      ]);
+    } catch {
+      onChangeMessages((current) => [
+        ...current,
+        {
+          id: nextId('assistant'),
+          role: 'assistant',
+          text: 'Não consegui falar com o servidor agora. Em uma emergência, ligue 192 (SAMU).',
+          createdAt: new Date().toISOString(),
+          kind: 'unavailable',
+        },
+      ]);
+    } finally {
+      setTyping(false);
+    }
   };
 
   useEffect(() => {
@@ -58,10 +73,13 @@ export function ChatScreen({ theme, initialSource }: ChatScreenProps) {
   }, [messages, typing]);
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.screen}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={styles.screen}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Assistente</Text>
-        <Text style={styles.mode}>{source === 'api' ? 'API ativa' : 'Demonstração'}</Text>
+        <Text style={styles.mode}>{uf ? uf.sigla : 'sem estado'}</Text>
       </View>
 
       <FlatList
@@ -72,9 +90,31 @@ export function ChatScreen({ theme, initialSource }: ChatScreenProps) {
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => {
           const isUser = item.role === 'user';
+          const isEmergency = item.kind === 'emergency';
+
           return (
-            <View style={[styles.message, isUser ? styles.userMessage : styles.assistantMessage]}>
-              <Text style={[styles.messageText, isUser && styles.userMessageText]}>{item.text}</Text>
+            <View
+              style={[
+                styles.message,
+                isUser ? styles.userMessage : styles.assistantMessage,
+                isEmergency && styles.emergencyMessage,
+              ]}
+            >
+              {isEmergency && (
+                <View style={styles.emergencyHeader}>
+                  <Ionicons name="alert-circle" size={16} color={theme.colors.danger} />
+                  <Text style={styles.emergencyLabel}>Atenção</Text>
+                </View>
+              )}
+              <Text
+                style={[
+                  styles.messageText,
+                  isUser && styles.userMessageText,
+                  isEmergency && styles.emergencyText,
+                ]}
+              >
+                {item.text}
+              </Text>
             </View>
           );
         }}
@@ -178,6 +218,22 @@ const createStyles = (theme: AppTheme) =>
       alignSelf: 'flex-end',
       backgroundColor: theme.colors.primaryStrong,
     },
+    emergencyMessage: {
+      backgroundColor: theme.colors.warningSoft,
+      borderColor: theme.colors.danger,
+      maxWidth: '92%',
+    },
+    emergencyHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 5,
+      marginBottom: 4,
+    },
+    emergencyLabel: {
+      color: theme.colors.danger,
+      fontFamily: typography.bold,
+      fontSize: 13,
+    },
     messageText: {
       color: theme.colors.text,
       fontFamily: typography.regular,
@@ -185,6 +241,7 @@ const createStyles = (theme: AppTheme) =>
       lineHeight: 21,
     },
     userMessageText: { color: theme.isDark ? '#102018' : '#FFFFFF' },
+    emergencyText: { color: theme.isDark ? theme.colors.text : '#7F1D1D' },
     typing: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
@@ -203,7 +260,7 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1,
       justifyContent: 'center',
       marginBottom: spacing.sm,
-      minHeight: 44,
+      minHeight: 48,
       paddingHorizontal: 12,
     },
     suggestionText: {

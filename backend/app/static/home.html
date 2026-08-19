@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UPA Agora — servidor de dados</title>
+<style>
+  :root {
+    --fundo: #f6f7f9;        --cartao: #ffffff;   --borda: #e3e6ea;
+    --texto: #1a1d21;        --suave: #5c636b;    --acento: #0b6b5f;
+    --acento-fraco: #e6f2f0; --alerta: #a4341f;   --alerta-fraco: #fdeeea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #14171a;        --cartao: #1c2024; --borda: #2c3238;
+      --texto: #e8eaed;        --suave: #9aa3ac;  --acento: #4fd1bd;
+      --acento-fraco: #16302c; --alerta: #f08c78; --alerta-fraco: #33201c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px 64px;
+    background: var(--fundo); color: var(--texto);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 19px; margin: 40px 0 12px; letter-spacing: -0.01em; }
+  p { margin: 0 0 12px; }
+  .sub { color: var(--suave); margin-bottom: 20px; }
+  .selo {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--acento-fraco); color: var(--acento);
+    padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 600;
+  }
+  .bolinha { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .cartao {
+    background: var(--cartao); border: 1px solid var(--borda);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 12px;
+  }
+  .faz { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .faz .cartao { margin: 0; }
+  .faz strong { display: block; margin-bottom: 4px; }
+  .faz span { color: var(--suave); font-size: 15px; }
+  button {
+    font: inherit; font-size: 15px; cursor: pointer;
+    background: var(--cartao); color: var(--texto);
+    border: 1px solid var(--borda); border-radius: 999px;
+    padding: 8px 16px; margin: 0 6px 8px 0;
+  }
+  button:hover { border-color: var(--acento); color: var(--acento); }
+  button.primario { background: var(--acento); color: var(--fundo); border-color: var(--acento); font-weight: 600; }
+  .linha { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input, select {
+    font: inherit; font-size: 15px; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid var(--borda); background: var(--cartao); color: var(--texto);
+  }
+  input { flex: 1 1 260px; min-width: 0; }
+  .unidade { display: flex; gap: 14px; align-items: baseline; }
+  .km { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--acento); white-space: nowrap; min-width: 74px; }
+  .nome { font-weight: 600; }
+  .detalhe { color: var(--suave); font-size: 14.5px; margin-top: 2px; }
+  .aviso { background: var(--alerta-fraco); color: var(--alerta); border-color: transparent; }
+  .vazio { color: var(--suave); font-style: italic; }
+  code { background: var(--acento-fraco); color: var(--acento); padding: 1px 6px; border-radius: 5px; font-size: 14px; }
+  footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--borda); color: var(--suave); font-size: 14.5px; }
+  a { color: var(--acento); }
+</style>
+</head>
+<body>
+<main>
+  <h1>UPA Agora — servidor de dados</h1>
+  <p class="sub">Esta página é o servidor que alimenta o aplicativo. Aqui você vê os dados reais chegando.</p>
+  <p><span class="selo"><span class="bolinha"></span>No ar</span></p>
+
+  <h2>O que ele faz</h2>
+  <div class="faz">
+    <div class="cartao">
+      <strong>Busca unidades reais</strong>
+      <span>Os dados vêm do CNES, o cadastro oficial do Ministério da Saúde. Nada é inventado.</span>
+    </div>
+    <div class="cartao">
+      <strong>Ordena pela distância</strong>
+      <span>Dada uma posição, devolve as unidades da mais perto para a mais longe.</span>
+    </div>
+    <div class="cartao">
+      <strong>Não chuta tempo de fila</strong>
+      <span>Não existe fonte pública nacional em tempo real, então o campo fica vazio.</span>
+    </div>
+  </div>
+
+  <h2>Veja funcionando</h2>
+  <p class="sub">Escolha um ponto de partida. O servidor calcula as unidades mais próximas na hora.</p>
+  <div class="linha" id="cidades"></div>
+  <div class="linha" style="margin-top:4px">
+    <button id="btn-local">Usar minha localização</button>
+    <select id="uf" aria-label="Estado"></select>
+  </div>
+  <div id="resultado" style="margin-top:16px"></div>
+
+  <h2>Pergunte ao assistente</h2>
+  <p class="sub">Ele responde por regras fixas sobre os dados reais — não é um chat de inteligência artificial.</p>
+  <div class="linha">
+    <input id="pergunta" value="qual a unidade mais próxima?" aria-label="Pergunta">
+    <button class="primario" id="btn-perguntar">Perguntar</button>
+  </div>
+  <div class="linha" style="margin-top:8px">
+    <button class="sugestao">estou com dor no peito</button>
+    <button class="sugestao">qual tem menos fila?</button>
+    <button class="sugestao">me mostre todas</button>
+  </div>
+  <div id="resposta" style="margin-top:16px"></div>
+
+  <h2>Por que não aparece tempo de fila</h2>
+  <div class="cartao">
+    <p>Não existe fonte pública nacional que informe fila de pronto atendimento em tempo real. Algumas prefeituras publicam painéis próprios, mas sem padrão entre elas.</p>
+    <p style="margin:0">Mostrar um número estimado como se fosse real poderia levar alguém à unidade errada numa urgência. Por isso o campo <code>waitMinutes</code> vem sempre vazio, em vez de inventado.</p>
+  </div>
+
+  <footer>
+    <p id="rodape-dados"></p>
+    <p style="margin:0">Documentação técnica da API: <a href="/docs">/docs</a></p>
+  </footer>
+</main>
+
+<script>
+const CIDADES = [
+  ["São Paulo", -23.5505, -46.6333, "SP"], ["Rio de Janeiro", -22.9068, -43.1729, "RJ"],
+  ["Brasília", -15.7939, -47.8828, "DF"], ["Belo Horizonte", -19.9167, -43.9345, "MG"],
+  ["Curitiba", -25.4284, -49.2733, "PR"], ["Salvador", -12.9777, -38.5016, "BA"],
+  ["Porto Alegre", -30.0346, -51.2177, "RS"], ["Recife", -8.0476, -34.8770, "PE"]
+];
+let atual = { lat: -23.5505, lon: -46.6333, uf: "SP", rotulo: "São Paulo" };
+
+const $ = (id) => document.getElementById(id);
+const escapar = (t) => String(t === null || t === undefined ? "" : t)
+  .replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+CIDADES.forEach(function (c) {
+  const b = document.createElement("button");
+  b.textContent = c[0];
+  b.onclick = function () {
+    atual = { lat: c[1], lon: c[2], uf: c[3], rotulo: c[0] };
+    $("uf").value = c[3];
+    buscar();
+  };
+  $("cidades").appendChild(b);
+});
+
+fetch("/api/ufs").then((r) => r.json()).then(function (ufs) {
+  $("uf").innerHTML = ufs.map((u) => '<option value="' + u.sigla + '">' + escapar(u.name) + "</option>").join("");
+  $("uf").value = atual.uf;
+  $("uf").onchange = function () { atual.uf = $("uf").value; atual.rotulo = $("uf").selectedOptions[0].text; buscar(); };
+}).catch(function () {});
+
+$("btn-local").onclick = function () {
+  if (!navigator.geolocation) return;
+  $("btn-local").textContent = "Localizando…";
+  navigator.geolocation.getCurrentPosition(
+    function (p) {
+      atual = { lat: p.coords.latitude, lon: p.coords.longitude, uf: $("uf").value, rotulo: "sua posição" };
+      $("btn-local").textContent = "Usar minha localização";
+      buscar();
+    },
+    function () { $("btn-local").textContent = "Não consegui sua localização"; }
+  );
+};
+
+function buscar() {
+  const alvo = $("resultado");
+  alvo.innerHTML = '<p class="vazio">Consultando o cadastro…</p>';
+  const q = new URLSearchParams({ lat: atual.lat, lon: atual.lon, uf: atual.uf, limit: 6 });
+  fetch("/api/upas/nearby?" + q).then((r) => r.json()).then(function (lista) {
+    if (!Array.isArray(lista) || lista.length === 0) {
+      alvo.innerHTML = '<div class="cartao vazio">Nenhuma unidade encontrada em ' + escapar(atual.uf) + " perto desse ponto.</div>";
+      return;
+    }
+    alvo.innerHTML =
+      '<p class="sub">Unidades mais próximas de <strong>' + escapar(atual.rotulo) + "</strong>:</p>" +
+      lista.map(function (u) {
+        return '<div class="cartao"><div class="unidade">' +
+          '<span class="km">' + (u.distanceKm === null || u.distanceKm === undefined ? "—" : u.distanceKm.toFixed(1) + " km") + "</span>" +
+          "<div>" +
+            '<div class="nome">' + escapar(u.name) + "</div>" +
+            '<div class="detalhe">' + escapar(u.address) + " · " + escapar(u.neighborhood) + "</div>" +
+            '<div class="detalhe">' + (u.openingHours ? escapar(u.openingHours) : "Horário não informado") +
+              (u.phone ? " · " + escapar(u.phone) : "") + "</div>" +
+            '<div class="detalhe">Tempo de fila: não informado publicamente</div>' +
+            (u.locationPrecision !== "exata"
+              ? '<div class="detalhe" style="color:var(--alerta)">Endereço impreciso no cadastro — a distância pode estar errada</div>'
+              : "") +
+          "</div></div></div>";
+      }).join("");
+  }).catch(function () {
+    alvo.innerHTML = '<div class="cartao vazio">Não consegui falar com o servidor.</div>';
+  });
+}
+
+function perguntar(texto) {
+  $("pergunta").value = texto;
+  const alvo = $("resposta");
+  alvo.innerHTML = '<p class="vazio">Pensando…</p>';
+  fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: texto, latitude: atual.lat, longitude: atual.lon, uf: atual.uf })
+  }).then((r) => r.json()).then(function (d) {
+    const emergencia = d.kind === "emergency";
+    alvo.innerHTML = '<div class="cartao' + (emergencia ? " aviso" : "") + '" style="white-space:pre-wrap">' + escapar(d.reply) + "</div>";
+  }).catch(function () {
+    alvo.innerHTML = '<div class="cartao vazio">Não consegui falar com o servidor.</div>';
+  });
+}
+
+$("btn-perguntar").onclick = function () { perguntar($("pergunta").value); };
+$("pergunta").onkeydown = function (e) { if (e.key === "Enter") perguntar($("pergunta").value); };
+document.querySelectorAll(".sugestao").forEach(function (b) {
+  b.onclick = function () { perguntar(b.textContent); };
+});
+
+fetch("/api/meta").then((r) => r.json()).then(function (m) {
+  const d = m.dadosGeradoEm ? new Date(m.dadosGeradoEm).toLocaleDateString("pt-BR") : null;
+  $("rodape-dados").textContent =
+    "Cadastro do CNES com " + m.unidades + " unidades de pronto atendimento em " + m.estados + " estados" +
+    (d ? ", atualizado em " + d + "." : ".");
+}).catch(function () {});
+
+buscar();
+</script>
+</body>
+</html>
