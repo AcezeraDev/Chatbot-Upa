@@ -75,8 +75,20 @@ def home() -> HTMLResponse:
 
 @app.get("/api/meta", tags=["system"], dependencies=[Depends(limit_read)])
 def meta() -> dict:
-    """Quantos estados e unidades o cadastro embarcado tem, e quando foi gerado."""
-    return seed_metadata()
+    """Metadados do cadastro e a hora que o servidor está usando.
+
+    A hora entra aqui porque o "aberto agora" depende dela: sem expô-la, uma
+    divergência de fuso entre a máquina de desenvolvimento e a de produção só
+    apareceria como unidade marcada errado, sem pista da causa.
+    """
+    from .schedule import now_in
+
+    agora = now_in("SP")
+    return {
+        **seed_metadata(),
+        "horaServidor": agora.isoformat(),
+        "fusoServidor": str(agora.tzinfo),
+    }
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
