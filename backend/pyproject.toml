@@ -12,6 +12,7 @@ dependencies = [
   "httpx>=0.28,<1",
   "uvicorn[standard]>=0.35,<1",
   "google-genai>=2.18,<3",
+  "tzdata>=2025.1",
 ]
 
 [project.optional-dependencies]

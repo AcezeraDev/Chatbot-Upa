@@ -35,6 +35,7 @@ UFS: tuple[UF, ...] = (
 
 _BY_SIGLA = {uf.sigla: uf for uf in UFS}
 _BY_NAME = {uf.name.casefold(): uf for uf in UFS}
+_BY_CODE = {uf.code: uf for uf in UFS}
 
 
 def resolve_uf(value: str) -> UF | None:
@@ -43,3 +44,8 @@ def resolve_uf(value: str) -> UF | None:
     if not cleaned:
         return None
     return _BY_SIGLA.get(cleaned.upper()) or _BY_NAME.get(cleaned.casefold())
+
+
+def uf_by_code(code: int) -> UF | None:
+    """Estado a partir do código do IBGE. Usado para descobrir o fuso horário."""
+    return _BY_CODE.get(code)

@@ -62,6 +62,13 @@
   .detalhe { color: var(--suave); font-size: 14.5px; margin-top: 2px; }
   .aviso { background: var(--alerta-fraco); color: var(--alerta); border-color: transparent; }
   .vazio { color: var(--suave); font-style: italic; }
+  .estado {
+    display: inline-block; font-size: 12.5px; font-weight: 700;
+    padding: 2px 9px; border-radius: 999px; margin-left: 8px; vertical-align: 2px;
+  }
+  .aberta { background: var(--acento-fraco); color: var(--acento); }
+  .fechada { background: var(--alerta-fraco); color: var(--alerta); }
+  .incerta { background: transparent; color: var(--suave); border: 1px solid var(--borda); }
   code { background: var(--acento-fraco); color: var(--acento); padding: 1px 6px; border-radius: 5px; font-size: 14px; }
   footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--borda); color: var(--suave); font-size: 14.5px; }
   a { color: var(--acento); }
@@ -84,8 +91,8 @@
       <span>Dada uma posição, devolve as unidades da mais perto para a mais longe.</span>
     </div>
     <div class="cartao">
-      <strong>Não chuta tempo de fila</strong>
-      <span>Não existe fonte pública nacional em tempo real, então o campo fica vazio.</span>
+      <strong>Diz se está aberta agora</strong>
+      <span>No fuso do estado da unidade. 16% delas não funcionam 24 horas.</span>
     </div>
   </div>
 
@@ -95,6 +102,10 @@
   <div class="linha" style="margin-top:4px">
     <button id="btn-local">Usar minha localização</button>
     <select id="uf" aria-label="Estado"></select>
+    <label style="font-size:15px; color:var(--suave); display:flex; gap:6px; align-items:center">
+      <input type="checkbox" id="so-abertas" style="flex:0 0 auto; width:auto">
+      só as abertas agora
+    </label>
   </div>
   <div id="resultado" style="margin-top:16px"></div>
 
@@ -110,6 +121,12 @@
     <button class="sugestao">me mostre todas</button>
   </div>
   <div id="resposta" style="margin-top:16px"></div>
+
+  <h2>Como sabemos se está aberta</h2>
+  <div class="cartao">
+    <p>84% das unidades atendem 24 horas por dia, e para essas a resposta é certa. As outras 16% atendem por turnos, e aí está o limite: o cadastro diz <em>manhã, tarde e noite</em> sem dizer que horas isso significa.</p>
+    <p style="margin:0">Nesses casos estimamos as faixas e avisamos que é estimativa. Quando o cadastro traz "turnos intermitentes" ou vem vazio, não afirmamos nada — a unidade aparece como horário indeterminado, para você ligar antes.</p>
+  </div>
 
   <h2>Por que não aparece tempo de fila</h2>
   <div class="cartao">
@@ -166,10 +183,19 @@ $("btn-local").onclick = function () {
   );
 };
 
+function selo(u) {
+  if (u.openNow === true) return '<span class="estado aberta">aberta agora</span>';
+  if (u.openNow === false) return '<span class="estado fechada">fechada agora</span>';
+  return '<span class="estado incerta">horário indeterminado</span>';
+}
+
 function buscar() {
   const alvo = $("resultado");
   alvo.innerHTML = '<p class="vazio">Consultando o cadastro…</p>';
-  const q = new URLSearchParams({ lat: atual.lat, lon: atual.lon, uf: atual.uf, limit: 6 });
+  const q = new URLSearchParams({
+    lat: atual.lat, lon: atual.lon, uf: atual.uf, limit: 6,
+    abertas: document.getElementById("so-abertas").checked ? "true" : "false",
+  });
   fetch("/api/upas/nearby?" + q).then((r) => r.json()).then(function (lista) {
     if (!Array.isArray(lista) || lista.length === 0) {
       alvo.innerHTML = '<div class="cartao vazio">Nenhuma unidade encontrada em ' + escapar(atual.uf) + " perto desse ponto.</div>";
@@ -181,11 +207,14 @@ function buscar() {
         return '<div class="cartao"><div class="unidade">' +
           '<span class="km">' + (u.distanceKm === null || u.distanceKm === undefined ? "—" : u.distanceKm.toFixed(1) + " km") + "</span>" +
           "<div>" +
-            '<div class="nome">' + escapar(u.name) + "</div>" +
+            '<div class="nome">' + escapar(u.name) + selo(u) + "</div>" +
             '<div class="detalhe">' + escapar(u.address) + " · " + escapar(u.neighborhood) + "</div>" +
             '<div class="detalhe">' + (u.openingHours ? escapar(u.openingHours) : "Horário não informado") +
               (u.phone ? " · " + escapar(u.phone) : "") + "</div>" +
             '<div class="detalhe">Tempo de fila: não informado publicamente</div>' +
+            (u.openingPrecision === "estimada"
+              ? '<div class="detalhe">O cadastro não informa os horários exatos — este é um palpite pelos turnos.</div>'
+              : "") +
             (u.locationPrecision !== "exata"
               ? '<div class="detalhe" style="color:var(--alerta)">Endereço impreciso no cadastro — a distância pode estar errada</div>'
               : "") +
@@ -212,6 +241,7 @@ function perguntar(texto) {
   });
 }
 
+$("so-abertas").onchange = buscar;
 $("btn-perguntar").onclick = function () { perguntar($("pergunta").value); };
 $("pergunta").onkeydown = function (e) { if (e.key === "Enter") perguntar($("pergunta").value); };
 document.querySelectorAll(".sugestao").forEach(function (b) {

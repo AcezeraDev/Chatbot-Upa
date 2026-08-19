@@ -101,9 +101,18 @@ def get_nearby(
     lon: float = Query(ge=-180, le=180),
     uf: str = Query(description="Sigla ou nome do estado, ex.: SP"),
     limit: int = Query(default=DEFAULT_RESULT_LIMIT, ge=1, le=50),
+    abertas: bool = Query(
+        default=False,
+        description=(
+            "Descarta as que sabidamente estão fechadas agora. As de horário "
+            "indeterminado permanecem, com aviso."
+        ),
+    ),
 ) -> list[Upa]:
     """Unidades mais próximas do ponto informado, da mais perto para a mais longe."""
-    return _guard_cnes(find_nearby, lat, lon, _uf_code_or_400(uf), limit)
+    return _guard_cnes(
+        find_nearby, lat, lon, _uf_code_or_400(uf), limit, only_open=abertas
+    )
 
 
 @app.post("/api/chat", response_model=ChatResponse, tags=["chat"], dependencies=[Depends(limit_chat)])

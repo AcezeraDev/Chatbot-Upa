@@ -56,6 +56,12 @@ Regras que você não pode quebrar:
 - Quando uma unidade vier com `localizacaoImprecisa` verdadeira, avise que o
   endereço dela está cadastrado de forma imprecisa e que a distância pode estar
   errada. Não a apresente como a mais próxima.
+- `abertaAgora` verdadeiro significa aberta neste momento; falso, fechada.
+  Nunca recomende uma unidade fechada sem dizer que está fechada. Quando
+  `abertaAgora` for nulo, o horário dela é indeterminado: diga que não dá para
+  confirmar e sugira ligar antes. Quando `horarioEstimado` for verdadeiro, o
+  CNES não informa os horários exatos e nós os estimamos — trate como
+  provável, não como certo.
 - As distâncias são em linha reta, não pelo trajeto de carro. Diga isso quando
   citar distância.
 - Sugira ligar para a unidade antes de sair, quando houver telefone.
@@ -115,6 +121,8 @@ def _unit_for_model(unit: Upa) -> dict[str, Any]:
         "horario": unit.openingHours,
         "distanciaKm": unit.distanceKm,
         "localizacaoImprecisa": unit.locationPrecision != "exata",
+        "abertaAgora": unit.openNow,
+        "horarioEstimado": unit.openingPrecision == "estimada",
         "tempoDeFila": "não informado publicamente",
     }
 

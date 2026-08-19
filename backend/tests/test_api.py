@@ -177,3 +177,28 @@ def test_chat_never_claims_an_unreliable_unit_is_nearest(monkeypatch) -> None:
     body = response.json()
     assert body["kind"] == "unavailable"
     assert "Upa Longe" not in body["reply"]
+
+
+def test_nearby_marks_units_as_open_or_closed() -> None:
+    """A consulta por proximidade traz o estado de funcionamento."""
+    response = client.get("/api/upas/nearby", params={"lat": -23.55, "lon": -46.63, "uf": "SP"})
+
+    assert response.status_code == 200
+    for unit in response.json():
+        assert "openNow" in unit
+        assert unit["openingPrecision"] in {"exata", "estimada", "desconhecida"}
+
+
+def test_nearby_can_drop_units_known_to_be_closed() -> None:
+    """Com abertas=true, nenhuma unidade sabidamente fechada aparece.
+
+    As de horário indeterminado permanecem: escondê-las tiraria da lista
+    unidades que podem estar abertas.
+    """
+    response = client.get(
+        "/api/upas/nearby",
+        params={"lat": -23.55, "lon": -46.63, "uf": "SP", "abertas": "true"},
+    )
+
+    assert response.status_code == 200
+    assert all(unit["openNow"] is not False for unit in response.json())

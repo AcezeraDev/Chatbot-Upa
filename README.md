@@ -140,6 +140,35 @@ Custo, para dimensionar: o `gemini-3.7-flash` custa US$ 0,75 por milhão de
 tokens de entrada e US$ 3,75 de saída até 31/12/2026, dobrando depois. Há também
 um nível gratuito, com limite de requisições.
 
+## Aberto agora
+
+Cada unidade traz `openNow` (`true`, `false` ou `null`) e `openingPrecision`.
+O parâmetro `abertas=true` em `/api/upas/nearby` descarta as sabidamente
+fechadas; as de horário indeterminado permanecem, porque escondê-las tiraria da
+lista unidades que podem estar abertas.
+
+Às três da manhã isso importa mais que distância: **16% das unidades não
+funcionam 24 horas**, e apresentar uma delas como "a mais próxima" na
+madrugada é o mesmo erro do tempo de fila inventado.
+
+O campo `descricao_turno_atendimento` do CNES parece texto livre, mas só tem 7
+valores distintos em 2061 unidades — vocabulário fechado, classificável com
+segurança. A precisão da resposta reflete o que dá para saber:
+
+| `openingPrecision` | Quando | O que significa |
+|---|---|---|
+| `exata` | Atendimento contínuo de 24 horas (84%) | Certeza, não há o que estimar |
+| `estimada` | Atende por turnos | O CNES diz "manhã, tarde e noite" sem informar horários; nós supomos 7h–12h, 12h–18h e 18h–23h |
+| `desconhecida` | Turnos intermitentes ou campo vazio | `openNow` vem `null`; não afirmamos nada |
+
+O cálculo usa o fuso do estado da unidade, não um fuso único: o Brasil tem
+quatro, e o Acre está três horas atrás de São Paulo — justamente onde há menos
+unidades para escolher. Por isso o `tzdata` é dependência.
+
+A marcação é feita na consulta, nunca no cache. As unidades ficam em memória
+por 24 horas, e gravar o `openNow` no objeto cacheado faria o app responder
+"aberta" de madrugada porque alguém consultou à tarde.
+
 ## Limite de requisições
 
 A API é pública e sem autenticação. Cada IP tem, por minuto, 120 requisições

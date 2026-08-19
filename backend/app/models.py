@@ -24,6 +24,13 @@ class Upa(BaseModel):
     # mostra um aviso e a distância deixa de ser apresentada como precisa.
     locationPrecision: Literal["exata", "aproximada"] = "exata"
 
+    # Se a unidade está aberta neste momento, no fuso do estado dela. Só é
+    # afirmado com certeza para atendimento contínuo de 24 horas; para as que
+    # atendem por turnos o CNES não informa os horários e nós os supomos.
+    # None significa que não dá para saber. Ver app/schedule.py.
+    openNow: bool | None = None
+    openingPrecision: Literal["exata", "estimada", "desconhecida"] = "desconhecida"
+
     # Distância em linha reta até o usuário. Preenchida apenas nas
     # consultas por proximidade.
     distanceKm: float | None = Field(default=None, ge=0)
