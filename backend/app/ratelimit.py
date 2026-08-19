@@ -42,12 +42,20 @@ _lock = threading.Lock()
 def client_key(request: Request) -> str:
     """Identifica quem chama.
 
-    Atrás do proxy do Vercel, o IP de origem chega em X-Forwarded-For e o
-    primeiro valor é o do cliente. O cabeçalho é falsificável, o que é mais um
-    motivo para tratar este limite como proteção contra excesso acidental, e
-    não como controle de acesso.
+    Na Vercel o IP real do cliente chega em `x-vercel-forwarded-for`, que a
+    plataforma preenche e o cliente não consegue sobrescrever — ela reescreve o
+    `x-forwarded-for` justamente para impedir spoofing de IP. Por isso preferimos
+    o cabeçalho da Vercel; o `x-forwarded-for` fica como reserva para rodar atrás
+    de outro proxy ou local.
+
+    Ainda assim, isto é proteção contra excesso, não controle de acesso: fora da
+    Vercel o `x-forwarded-for` é falsificável, e a contagem vive na memória de cada
+    instância (ver o cabeçalho do módulo). Um teto global de verdade precisa da
+    borda — Vercel Firewall/WAF — mais um limite de gasto na chave do modelo.
     """
-    encaminhado = request.headers.get("x-forwarded-for", "")
+    encaminhado = request.headers.get("x-vercel-forwarded-for") or request.headers.get(
+        "x-forwarded-for", ""
+    )
     if encaminhado:
         return encaminhado.split(",")[0].strip()
     return request.client.host if request.client else "desconhecido"

@@ -13,6 +13,7 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -244,8 +245,15 @@ def list_units_by_uf(uf_code: int) -> list[Upa]:
     return units
 
 
+@lru_cache(maxsize=1)
 def seed_metadata() -> dict[str, Any]:
-    """Resumo do cadastro embarcado, para a pagina inicial mostrar ao visitante."""
+    """Resumo do cadastro embarcado, para a pagina inicial mostrar ao visitante.
+
+    O seed é imutável dentro de um deploy, então o resultado é calculado uma vez e
+    memorizado. Sem isso, cada acesso a /api/meta reprocessava ~3,4 MB de JSON só
+    para somar a contagem — trabalho repetido que a Vercel cobra como CPU ativa.
+    Os testes que trocam SEED_DIR chamam seed_metadata.cache_clear() via clear_cache().
+    """
     estados = sorted(SEED_DIR.glob("upas-uf-*.json"))
     unidades = 0
     for arquivo in estados:
@@ -269,3 +277,6 @@ def clear_cache() -> None:
     """Usado pelos testes e por uma eventual rotina de atualização."""
     with _lock:
         _memory_cache.clear()
+    # O resumo do seed também é memorizado; testes que trocam SEED_DIR precisam
+    # que ele seja recalculado, senão veriam a contagem de outro diretório.
+    seed_metadata.cache_clear()

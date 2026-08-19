@@ -12,33 +12,66 @@ from .models import Upa
 
 # Sinais que exigem atendimento imediato. A recomendação nunca deve ser
 # "vá até a unidade com menor fila" diante de qualquer um deles.
+#
+# Os termos são **radicais**, não frases inteiras, e casam por substring sobre o
+# texto já normalizado (sem acento, minúsculo). Isso é deliberado: "sangr" pega
+# "sangrando", "sangramento" e "sangue"; "respir" pega "não consigo respirar" e
+# "dificuldade pra respirar". Numa emergência a pessoa não escreve o termo do
+# glossário — escreve em pânico. O falso positivo aqui custa uma linha de texto;
+# o falso negativo custa tempo. Por isso preferimos casar demais a casar de menos.
 EMERGENCY_TERMS = (
+    # Sinais genéricos de gravidade
     "emergencia",
+    "socorro",
+    "urgente",
+    "urgencia",
+    "risco de vida",
+    "passando mal",
     "grave",
-    "dor no peito",
-    "aperto no peito",
+    # Cardíaco / respiratório
+    "peito",           # dor / aperto / pressao no peito
+    "respir",          # respirar, respiracao, nao consigo respirar
     "falta de ar",
-    "nao consigo respirar",
-    "sem respirar",
-    "desmaio",
-    "desmaiou",
+    "sem ar",
+    "sufoca",          # sufocando, sufocado
+    "infarto",
+    "enfarte",
+    "enfarto",
+    # Neurológico / consciência
+    "desmai",          # desmaio, desmaiou, desmaiando
     "inconsciente",
-    "convulsao",
+    "desacordad",
+    "nao acorda",
+    "convuls",         # convulsao, convulsionando
     "avc",
     "derrame",
-    "infarto",
-    "sangramento",
+    "boca torta",
+    "dormencia",       # dormencia no braco / rosto (sinal de AVC)
+    # Sangramento
+    "sangr",           # sangrando, sangramento
+    "sangue",          # "perdendo sangue" — não casa com o radical "sangr"
     "hemorragia",
-    "envenenamento",
-    "intoxicacao",
+    # Intoxicação
+    "envenen",         # envenenamento, envenenado
+    "veneno",
+    "intoxica",        # intoxicacao, intoxicado
     "overdose",
-    "queimadura",
-    "fratura exposta",
-    "atropelado",
+    "engoliu",         # engoliu veneno / produto / objeto
+    # Traumas
+    "queim",           # queimei, queimou, queimadura, queimando
+    "fratura",
+    "atropel",         # atropelado, atropelamento
     "acidente",
+    "colisao",
+    # Obstétrico
     "parto",
-    "suicidio",
+    "bolsa estourou",
+    # Autolesão
+    "suicid",          # suicidio, suicida
+    "me matar",
     "se matar",
+    "tirar a vida",
+    "me machucar",
 )
 
 EMERGENCY_REPLY = (

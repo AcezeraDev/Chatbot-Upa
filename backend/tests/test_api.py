@@ -202,3 +202,42 @@ def test_nearby_can_drop_units_known_to_be_closed() -> None:
 
     assert response.status_code == 200
     assert all(unit["openNow"] is not False for unit in response.json())
+
+
+def test_meta_is_memoised_across_requests() -> None:
+    """/api/meta não pode reprocessar o seed a cada acesso.
+
+    O conftest limpa o cache antes de cada teste, então a primeira chamada é um
+    miss e as seguintes têm de ser hits — prova de que o resultado é memorizado.
+    """
+    from app import cnes
+
+    cnes.seed_metadata.cache_clear()
+    for _ in range(3):
+        assert client.get("/api/meta").status_code == 200
+
+    info = cnes.seed_metadata.cache_info()
+    assert info.misses == 1
+    assert info.hits >= 2
+
+
+def test_home_page_sets_security_headers() -> None:
+    response = client.get("/")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert "Content-Security-Policy" in response.headers
+
+
+def test_cors_is_closed_by_default() -> None:
+    """Sem CORS_ORIGINS, origem de terceiro não recebe o cabeçalho de permissão."""
+    response = client.get("/api/ufs", headers={"Origin": "https://evil.example"})
+    assert response.headers.get("access-control-allow-origin") != "*"
+
+
+def test_validation_error_does_not_echo_the_input() -> None:
+    """O 422 não deve repetir de volta a mensagem enviada (pode conter dado sensível)."""
+    marker = "gatilho-sensivel-xyz"
+    response = client.post("/api/chat", json={"message": marker * 30})  # > 500 chars
+    assert response.status_code == 422
+    assert marker not in response.text

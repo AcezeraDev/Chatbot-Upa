@@ -166,7 +166,7 @@ CIDADES.forEach(function (c) {
 });
 
 fetch("/api/ufs").then((r) => r.json()).then(function (ufs) {
-  $("uf").innerHTML = ufs.map((u) => '<option value="' + u.sigla + '">' + escapar(u.name) + "</option>").join("");
+  $("uf").innerHTML = ufs.map((u) => '<option value="' + escapar(u.sigla) + '">' + escapar(u.name) + "</option>").join("");
   $("uf").value = atual.uf;
   $("uf").onchange = function () { atual.uf = $("uf").value; atual.rotulo = $("uf").selectedOptions[0].text; buscar(); };
 }).catch(function () {});
@@ -193,8 +193,10 @@ function selo(u) {
 function buscar() {
   const alvo = $("resultado");
   alvo.innerHTML = '<p class="vazio">Consultando o cadastro…</p>';
+  // 3 casas (~110 m): mantém a ordenação e evita gravar a posição exata na URL.
+  const grosso = (v) => Math.round(v * 1000) / 1000;
   const q = new URLSearchParams({
-    lat: atual.lat, lon: atual.lon, uf: atual.uf, limit: 6,
+    lat: grosso(atual.lat), lon: grosso(atual.lon), uf: atual.uf, limit: 6,
     abertas: document.getElementById("so-abertas").checked ? "true" : "false",
   });
   fetch("/api/upas/nearby?" + q).then((r) => r.json()).then(function (lista) {

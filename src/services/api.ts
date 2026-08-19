@@ -54,10 +54,18 @@ const parseUnits = (payload: unknown): Upa[] => {
   });
 };
 
+/**
+ * Reduz a coordenada a 3 casas decimais (~110 m) antes de mandá-la na URL. A URL
+ * entra em logs de servidor, proxies e histórico do navegador; a posição exata de
+ * quem procura pronto atendimento não precisa ficar registrada ali. Dentro do raio
+ * de busca de 60 km, ~110 m não muda a ordenação por distância.
+ */
+const coarse = (value: number): string => (Math.round(value * 1000) / 1000).toString();
+
 export const getNearbyUpas = async (coords: Coordinates, uf: string): Promise<Upa[]> => {
   const query = new URLSearchParams({
-    lat: String(coords.latitude),
-    lon: String(coords.longitude),
+    lat: coarse(coords.latitude),
+    lon: coarse(coords.longitude),
     uf,
     limit: '15',
   });

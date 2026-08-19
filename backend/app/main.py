@@ -2,8 +2,10 @@ import os
 
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .cnes import CnesUnavailableError, seed_metadata
@@ -25,9 +27,16 @@ app = FastAPI(
     version="0.2.0",
 )
 
+# CORS fecha por padrão. O app é nativo (não envia cabeçalho Origin, então CORS
+# nem se aplica a ele) e a página inicial é servida pelo próprio backend, na mesma
+# origem — nenhum dos dois precisa de CORS aberto. Deixar "*" como padrão só servia
+# para um site de terceiros mandar o navegador de seus visitantes bater no endpoint
+# pago /api/chat. Se um dia existir um front web em outra origem, liste-a em
+# CORS_ORIGINS (separada por vírgula). "*" continua possível, mas agora é opção
+# explícita, não o padrão.
 configured_origins = [
     origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "*").split(",")
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
     if origin.strip()
 ]
 
@@ -38,6 +47,36 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Accept"],
 )
+
+
+# Cabeçalhos de segurança em toda resposta. Nenhum conteúdo não confiável é
+# renderizado pelo servidor, então isto é higiene — mas o Referrer-Policy também
+# evita que a URL de /api/upas/nearby (com coordenada) vaze no cabeçalho Referer.
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
+    )
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_handler(request: Request, exc: RequestValidationError):
+    """422 sem ecoar de volta a entrada do usuário.
+
+    O tratamento padrão devolve o campo `input` com o valor enviado — inclusive a
+    mensagem do chat, que pode conter dado de saúde. Não há motivo para repetir a
+    entrada na resposta; removemos `input` e `url` de cada erro.
+    """
+    limpos = []
+    for erro in exc.errors():
+        erro = {chave: valor for chave, valor in erro.items() if chave not in ("input", "url")}
+        limpos.append(erro)
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(limpos)})
 
 
 def _uf_code_or_400(uf: str) -> int:
@@ -68,9 +107,24 @@ def home() -> HTMLResponse:
     em linguagem comum, com os dados reais chegando, para quem so quer ver
     se esta funcionando.
     """
+    # A página só conversa com a própria origem. A CSP prende tudo a 'self' e
+    # bloqueia enquadramento; 'unsafe-inline' é necessário porque o script e os
+    # estilos são inline no arquivo. Aplicada só aqui: uma CSP global quebraria o
+    # Swagger em /docs, que carrega assets de CDN.
+    csp = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; "
+        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    )
     if not HOME_PAGE.exists():
-        return HTMLResponse("<h1>UPA Agora API</h1><p>Documentacao em <a href=/docs>/docs</a>.</p>")
-    return HTMLResponse(HOME_PAGE.read_text(encoding="utf-8"))
+        return HTMLResponse(
+            "<h1>UPA Agora API</h1><p>Documentacao em <a href=/docs>/docs</a>.</p>",
+            headers={"Content-Security-Policy": csp},
+        )
+    return HTMLResponse(
+        HOME_PAGE.read_text(encoding="utf-8"),
+        headers={"Content-Security-Policy": csp},
+    )
 
 
 @app.get("/api/meta", tags=["system"], dependencies=[Depends(limit_read)])
