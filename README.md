@@ -58,7 +58,7 @@ upa-agora/
 ├── package.json            # Dependências e comandos do aplicativo
 ├── src/
 │   ├── components/         # Cartões, navegação e seletor de estado
-│   ├── screens/            # Início, Chat e Projeto
+│   ├── screens/            # Início, Chat e Sobre
 │   ├── services/           # Comunicação com a API e localização
 │   ├── theme.ts            # Cores, tipografia e espaçamentos
 │   └── types.ts            # Tipos TypeScript
@@ -82,6 +82,7 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `.env.example` | Modelo das variáveis públicas do aplicativo. Mostra qual endereço de API deve ser colocado no `.env` local. |
 | `.gitignore` | Impede que dependências, ambientes locais, caches, APKs e arquivos com configuração pessoal sejam enviados ao Git. |
 | `app.json` | Configuração principal do Expo: nome do app, identificadores Android/iOS, orientação, tema e permissões de localização. |
+| `eas.json` | Configura os builds do Expo Application Services. O perfil `apk` gera um arquivo Android instalável e aponta o app para o backend publicado. |
 | `App.tsx` | Ponto central do aplicativo. Mantém a aba ativa, localização, UF, unidades, estados de carregamento e histórico do chat; também conecta as telas e o seletor de estado. |
 | `package.json` | Declara as dependências JavaScript e os comandos `start`, `web`, `android`, `typecheck` e `export:web`. |
 | `package-lock.json` | Registra as versões exatas instaladas pelo npm para que todos os colegas recebam a mesma árvore de dependências. É atualizado pelo npm e não deve ser editado manualmente. |
@@ -99,10 +100,10 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `src/services/location.ts` | Solicita permissão, obtém a posição do aparelho e tenta descobrir cidade e estado com geocoding reverso local. |
 | `src/screens/HomeScreen.tsx` | Tela inicial. Apresenta o produto, estados de localização/erro, aviso do SAMU e a lista de unidades. |
 | `src/screens/ChatScreen.tsx` | Interface do assistente. Guarda o texto sendo digitado, envia mensagens, mostra respostas, sugestões, carregamento e destaque de emergência. |
-| `src/screens/AboutScreen.tsx` | Tela Projeto. Explica a fonte dos dados, limites, privacidade e decisões responsáveis do aplicativo. |
+| `src/screens/AboutScreen.tsx` | Tela Sobre. Explica a fonte dos dados, limites, privacidade e decisões responsáveis do aplicativo. |
 | `src/components/UpaCard.tsx` | Cartão de uma unidade. Formata distância e horário, mostra precisão, abre rota no mapa e inicia ligação telefônica. |
 | `src/components/UfPicker.tsx` | Modal inferior com os 27 estados. É usado quando a UF precisa ser escolhida ou trocada manualmente. |
-| `src/components/BottomNav.tsx` | Navegação inferior entre Início, Chat e Projeto, com papéis e rótulos de acessibilidade. |
+| `src/components/BottomNav.tsx` | Navegação inferior entre Início, Chat e Sobre, com papéis e rótulos de acessibilidade. |
 
 ### Backend: configuração e entrada
 
@@ -475,6 +476,98 @@ Talvez seja necessário permitir o Python no Firewall do Windows.
 
 ---
 
+# Como gerar um APK para instalar no Android
+
+O caminho mais simples para a equipe é usar o **EAS Build**, que compila o aplicativo nos servidores do Expo. Não é necessário instalar Android Studio ou JDK para esse processo.
+
+> O APK serve para instalar o aplicativo diretamente em um celular ou emulador. Para publicar na Google Play, o formato normalmente utilizado é `.aab`.
+
+## 1. Confirme a configuração
+
+Na raiz do projeto, confira o arquivo `eas.json`. O perfil já preparado para instalação direta é:
+
+```json
+{
+  "build": {
+    "apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://backend-roan-five-70.vercel.app"
+      }
+    }
+  }
+}
+```
+
+Se o endereço do backend mudar, atualize `EXPO_PUBLIC_API_URL` nesse arquivo antes de gerar o APK. Essa URL é pública; nunca coloque `OPENAI_API_KEY` ou outra chave secreta no `eas.json`.
+
+## 2. Entre na conta Expo
+
+Crie uma conta gratuita em [expo.dev](https://expo.dev/) caso ainda não tenha. Depois, na raiz do projeto, execute:
+
+```powershell
+npx eas-cli@latest login
+```
+
+Informe o e-mail e a senha da conta Expo.
+
+## 3. Gere o APK
+
+```powershell
+npx eas-cli@latest build --platform android --profile apk
+```
+
+Na primeira compilação:
+
+1. O EAS pode pedir para vincular ou criar um projeto no Expo. Confirme.
+2. Quando perguntar sobre as credenciais Android, escolha gerar uma nova **keystore**.
+3. Aguarde o upload e a compilação.
+
+Não feche o terminal antes de o upload terminar. A compilação continuará nos servidores do Expo mesmo que o computador seja desligado depois dessa etapa.
+
+## 4. Baixe e instale no celular
+
+Quando a compilação terminar, o terminal mostrará um link:
+
+1. Abra o link para acessar os detalhes do build.
+2. Clique em **Download** ou **Install**.
+3. Abra o mesmo link no celular ou leia o QR code mostrado pelo Expo.
+4. Baixe o arquivo `.apk`.
+5. Abra o arquivo no Android e autorize a instalação de aplicativos dessa fonte, se o sistema solicitar.
+
+O APK gerado com o perfil `apk` é independente do Expo Go e não precisa do Metro aberto.
+
+## Gerar uma nova versão
+
+Antes de distribuir uma atualização, aumente estes valores em `app.json`:
+
+```json
+{
+  "expo": {
+    "version": "1.0.1",
+    "android": {
+      "versionCode": 2
+    }
+  }
+}
+```
+
+- `version` é a versão exibida para as pessoas.
+- `versionCode` precisa ser um número inteiro maior a cada nova versão Android.
+
+Depois execute novamente:
+
+```powershell
+npx eas-cli@latest build --platform android --profile apk
+```
+
+Guia oficial: [gerar APKs com EAS Build](https://docs.expo.dev/build-reference/apk/).
+
+---
+
 # Comandos usados no dia a dia
 
 Execute os comandos do app na raiz do projeto:
@@ -488,6 +581,7 @@ Execute os comandos do app na raiz do projeto:
 | `npm run android` | Compila e abre a versão Android de desenvolvimento |
 | `npm run typecheck` | Verifica os tipos TypeScript |
 | `npm run export:web` | Gera a versão web de produção em `dist` |
+| `npx eas-cli@latest build --platform android --profile apk` | Gera um APK instalável nos servidores do Expo |
 
 Comandos do backend, executados dentro de `backend`:
 
