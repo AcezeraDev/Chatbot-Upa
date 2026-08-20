@@ -5,6 +5,8 @@ aqui não é o texto que o modelo produz, e sim as amarras em volta dele.
 """
 
 import json
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -65,7 +67,7 @@ def test_emergency_never_reaches_the_model(monkeypatch):
     É a garantia mais importante do módulo: um modelo pode suavizar o alerta
     ou falhar em reconhecê-lo, e numa urgência a demora é o dano.
     """
-    monkeypatch.setenv("GEMINI_API_KEY", "chave-de-teste")
+    monkeypatch.setenv("OPENAI_API_KEY", "chave-de-teste")
     monkeypatch.setattr(assistant, "_ask_model", _ClienteQueExplode)
 
     reply, kind = assistant.reply_to("estou com dor no peito", -23.55, -46.63, "SP")
@@ -76,7 +78,7 @@ def test_emergency_never_reaches_the_model(monkeypatch):
 
 def test_falls_back_to_rules_without_api_key(monkeypatch, seeded):
     """Sem chave configurada, o serviço responde por regra fixa."""
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     reply, kind = assistant.reply_to("qual a mais perto?", -23.55, -46.63, "SP")
 
@@ -86,7 +88,7 @@ def test_falls_back_to_rules_without_api_key(monkeypatch, seeded):
 
 def test_falls_back_to_rules_when_the_model_fails(monkeypatch, seeded):
     """Falha do modelo não pode virar erro para quem perguntou."""
-    monkeypatch.setenv("GEMINI_API_KEY", "chave-de-teste")
+    monkeypatch.setenv("OPENAI_API_KEY", "chave-de-teste")
 
     def explode(*args, **kwargs):
         raise RuntimeError("cota esgotada")
@@ -97,6 +99,64 @@ def test_falls_back_to_rules_when_the_model_fails(monkeypatch, seeded):
 
     assert kind != "assistant"
     assert "Upa Perto" in reply
+
+
+def test_openai_responses_executes_the_cnes_tool(monkeypatch, seeded):
+    """A integração usa Luna e devolve ao modelo somente unidades do CNES."""
+    function_call = SimpleNamespace(
+        type="function_call",
+        name="buscar_unidades_proximas",
+        arguments=json.dumps({"limite": 1}),
+        call_id="call_123",
+    )
+    responses = [
+        SimpleNamespace(output=[function_call], output_text=""),
+        SimpleNamespace(output=[], output_text="A UPA Perto é a mais próxima."),
+    ]
+    requests = []
+
+    class FakeResponses:
+        def create(self, **kwargs):
+            requests.append(kwargs)
+            return responses.pop(0)
+
+    fake_client = SimpleNamespace(responses=FakeResponses())
+    fake_module = SimpleNamespace(OpenAI=lambda: fake_client)
+    monkeypatch.setitem(sys.modules, "openai", fake_module)
+    monkeypatch.setenv("OPENAI_API_KEY", "chave-de-teste")
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+
+    reply, kind = assistant.reply_to("qual a mais perto?", -23.55, -46.63, "SP")
+
+    assert kind == "assistant"
+    assert reply == "A UPA Perto é a mais próxima."
+    assert len(requests) == 2
+    assert requests[0]["model"] == "gpt-5.6-luna"
+    assert requests[0]["reasoning"] == {"effort": "low"}
+    assert requests[0]["store"] is False
+
+    tool_outputs = [
+        item
+        for item in requests[1]["input"]
+        if isinstance(item, dict) and item.get("type") == "function_call_output"
+    ]
+    assert len(tool_outputs) == 1
+    assert tool_outputs[0]["call_id"] == "call_123"
+    payload = json.loads(tool_outputs[0]["output"])
+    assert [unit["nome"] for unit in payload["unidades"]] == ["Upa Perto"]
+
+
+def test_openai_configuration_can_override_model_and_effort(monkeypatch):
+    """Modelo e esforço podem mudar sem alteração no código."""
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-5.6-luna")
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "medium")
+
+    assert assistant._model_name() == "gpt-5.6-luna"
+    assert assistant._reasoning_effort() == "medium"
+
+    monkeypatch.setenv("OPENAI_REASONING_EFFORT", "valor-invalido")
+    assert assistant._reasoning_effort() == "low"
 
 
 def test_tool_returns_real_units_ordered_by_distance(seeded):

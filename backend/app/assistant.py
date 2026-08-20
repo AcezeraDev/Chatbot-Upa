@@ -14,7 +14,7 @@ urgência, uma informação errada é pior do que informação nenhuma.
    linguagem inventa nome, endereço e telefone plausíveis — o pior erro
    possível neste aplicativo.
 
-Sem `GEMINI_API_KEY` configurada, ou diante de qualquer falha da API, o
+Sem `OPENAI_API_KEY` configurada, ou diante de qualquer falha da API, o
 assistente cai nas respostas determinísticas de `domain.py`. O serviço nunca
 fica indisponível por causa do modelo.
 """
@@ -32,7 +32,9 @@ from .repository import find_nearby, list_upas
 from .ufs import resolve_uf
 
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+DEFAULT_MODEL = "gpt-5.6-luna"
+DEFAULT_REASONING_EFFORT = "low"
+VALID_REASONING_EFFORTS = {"none", "low", "medium", "high", "xhigh", "max"}
 
 # Cada rodada é uma ida ao modelo. O teto evita que uma conversa em laço
 # consuma tokens indefinidamente; na prática uma consulta resolve em uma.
@@ -107,7 +109,20 @@ class AssistantUnavailableError(RuntimeError):
 
 def is_configured() -> bool:
     """Há chave de API para conversar com o modelo?"""
-    return bool(os.getenv("GEMINI_API_KEY"))
+    return bool(os.getenv("OPENAI_API_KEY"))
+
+
+def _model_name() -> str:
+    """Modelo configurado, com Luna como padrão do projeto."""
+    return os.getenv("OPENAI_MODEL", "").strip() or DEFAULT_MODEL
+
+
+def _reasoning_effort() -> str:
+    """Esforço de raciocínio aceito pela família GPT-5.6."""
+    configured = os.getenv("OPENAI_REASONING_EFFORT", "").strip().lower()
+    if configured in VALID_REASONING_EFFORTS:
+        return configured
+    return DEFAULT_REASONING_EFFORT
 
 
 def _unit_for_model(unit: Upa) -> dict[str, Any]:
@@ -191,27 +206,35 @@ def _ask_model(
     longitude: float | None,
     uf: str | None,
 ) -> str:
-    """Conversa com o modelo, executando as ferramentas que ele pedir."""
+    """Conversa pela Responses API, executando as ferramentas solicitadas."""
     try:
-        from google import genai
+        from openai import OpenAI
     except ImportError as error:  # pragma: no cover - dependência ausente
-        raise AssistantUnavailableError("google-genai não está instalado") from error
+        raise AssistantUnavailableError("openai não está instalado") from error
 
-    client = genai.Client()
+    client = OpenAI()
+    input_items: list[Any] = [{"role": "user", "content": message}]
 
-    interaction = client.interactions.create(
-        model=MODEL,
-        input=message,
-        system_instruction=SYSTEM_INSTRUCTION,
+    response = client.responses.create(
+        model=_model_name(),
+        input=input_items,
+        instructions=SYSTEM_INSTRUCTION,
         tools=[BUSCAR_UNIDADES_TOOL],
+        reasoning={"effort": _reasoning_effort()},
+        # Mensagens podem conter dados de saúde. Não mantemos a resposta no
+        # armazenamento da API e carregamos o contexto entre rodadas aqui.
+        store=False,
     )
 
     for _ in range(MAX_TOOL_ROUNDS):
-        calls = [step for step in (interaction.steps or []) if step.type == "function_call"]
+        output = list(response.output or [])
+        calls = [item for item in output if item.type == "function_call"]
         if not calls:
             break
 
-        results = []
+        # A Responses API precisa receber novamente os itens da resposta,
+        # inclusive os itens de raciocínio, antes dos resultados de função.
+        input_items.extend(output)
         for call in calls:
             arguments = call.arguments
             if isinstance(arguments, str):
@@ -219,30 +242,35 @@ def _ask_model(
                     arguments = json.loads(arguments)
                 except json.JSONDecodeError:
                     arguments = {}
+            if not isinstance(arguments, dict):
+                arguments = {}
 
-            results.append(
+            if call.name == BUSCAR_UNIDADES_TOOL["name"]:
+                result = _run_tool(arguments, latitude, longitude, uf)
+            else:
+                result = json.dumps(
+                    {"erro": f"Ferramenta desconhecida: {call.name}"},
+                    ensure_ascii=False,
+                )
+
+            input_items.append(
                 {
-                    "type": "function_result",
-                    "name": call.name,
-                    "call_id": call.id,
-                    "result": [
-                        {
-                            "type": "text",
-                            "text": _run_tool(arguments or {}, latitude, longitude, uf),
-                        }
-                    ],
+                    "type": "function_call_output",
+                    "call_id": call.call_id,
+                    "output": result,
                 }
             )
 
-        interaction = client.interactions.create(
-            model=MODEL,
-            input=results,
-            system_instruction=SYSTEM_INSTRUCTION,
+        response = client.responses.create(
+            model=_model_name(),
+            input=input_items,
+            instructions=SYSTEM_INSTRUCTION,
             tools=[BUSCAR_UNIDADES_TOOL],
-            previous_interaction_id=interaction.id,
+            reasoning={"effort": _reasoning_effort()},
+            store=False,
         )
 
-    reply = (interaction.output_text or "").strip()
+    reply = (response.output_text or "").strip()
     if not reply:
         raise AssistantUnavailableError("o modelo não devolveu texto")
     return reply
