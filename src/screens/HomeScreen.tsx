@@ -1,9 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { UpaCard } from '../components/UpaCard';
 import type { AppTheme } from '../theme';
-import { spacing, typography } from '../theme';
+import { radii, spacing, typography } from '../theme';
 import type { LoadStatus, UF, Upa } from '../types';
 
 type HomeScreenProps = {
@@ -28,23 +37,23 @@ type EmptyState = {
 const emptyStates: Record<string, EmptyState> = {
   'permission-denied': {
     icon: 'location-outline',
-    title: 'Permissão de localização negada',
-    body: 'Sem a localização não dá para calcular qual unidade está mais perto. Você pode liberar o acesso ou escolher o estado manualmente.',
+    title: 'Localização desativada',
+    body: 'Libere o acesso para ordenar por distância ou escolha um estado para consultar a lista.',
   },
   'location-unavailable': {
     icon: 'compass-outline',
-    title: 'Não consegui obter sua localização',
-    body: 'Verifique se o GPS está ligado. Você também pode escolher o estado manualmente e ver as unidades cadastradas.',
+    title: 'Localização indisponível',
+    body: 'Verifique se o GPS está ligado ou escolha um estado para continuar sem distância.',
   },
   'uf-unknown': {
     icon: 'map-outline',
-    title: 'Escolha o seu estado',
-    body: 'Consegui a sua posição, mas não o estado correspondente — isso acontece no navegador. Escolha o estado e a distância até cada unidade será calculada normalmente.',
+    title: 'Escolha seu estado',
+    body: 'Sua posição foi encontrada, mas precisamos da UF para consultar o cadastro correto.',
   },
   offline: {
     icon: 'cloud-offline-outline',
     title: 'Servidor indisponível',
-    body: 'Não foi possível consultar o cadastro do Ministério da Saúde. Os dados são reais e vêm do CNES, por isso o app não inventa unidades quando está sem conexão.',
+    body: 'Não foi possível consultar o CNES agora. O app não cria unidades quando está offline.',
   },
 };
 
@@ -63,130 +72,188 @@ export function HomeScreen({
   const styles = createStyles(theme);
   const busy = status.state === 'locating' || status.state === 'loading';
   const empty = emptyStates[status.state];
+  const hasDistances = upas.some(
+    (upa) => upa.distanceKm !== null && upa.distanceKm !== undefined,
+  );
 
   return (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.colors.primary]} />
+        <RefreshControl
+          colors={[theme.colors.accent]}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
+          tintColor={theme.colors.accent}
+        />
       }
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>UPA Agora</Text>
+          <View style={styles.brand}>
+            <View style={styles.brandMark}>
+              <Ionicons
+                name="medical-outline"
+                size={20}
+                color={theme.isDark ? theme.colors.background : '#FFFFFF'}
+              />
+            </View>
+            <View>
+              <Text style={styles.brandName}>UPA</Text>
+              <Text style={styles.brandSuffix}>agora</Text>
+            </View>
+          </View>
+
           <Pressable
+            accessibilityHint="Abre a lista de estados"
             accessibilityLabel="Trocar estado"
             accessibilityRole="button"
             onPress={onChangeUf}
-            style={({ pressed }) => [styles.ufButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.ufButton, pressed && styles.pressedSurface]}
           >
-            <Ionicons name="location-outline" size={14} color={theme.colors.primary} />
+            <Ionicons name="location-outline" size={17} color={theme.colors.text} />
             <Text style={styles.ufText}>{uf?.sigla ?? 'Estado'}</Text>
+            <Ionicons name="chevron-down" size={14} color={theme.colors.textMuted} />
           </Pressable>
         </View>
 
-        <Text style={styles.heading}>Pronto atendimento perto de você</Text>
-        <Text style={styles.description}>
-          {city
-            ? `Unidades reais cadastradas no CNES, ordenadas a partir de ${city}.`
-            : 'Unidades reais cadastradas no CNES (Ministério da Saúde).'}
-        </Text>
+        <View style={styles.hero}>
+          <Text style={styles.eyebrow}>PRONTO ATENDIMENTO</Text>
+          <Text style={styles.heading}>Cuidado perto de você.</Text>
+          <Text style={styles.description}>
+            {city
+              ? `Unidades oficiais próximas de ${city}, ordenadas em linha reta.`
+              : 'Encontre unidades reais do CNES e confirme o atendimento antes de sair.'}
+          </Text>
+        </View>
+
+        <Pressable
+          accessibilityLabel="Ligar 192 para o SAMU"
+          accessibilityRole="button"
+          onPress={() => Linking.openURL('tel:192').catch(() => undefined)}
+          style={({ pressed }) => [styles.emergency, pressed && styles.pressedSurface]}
+        >
+          <View style={styles.emergencyIcon}>
+            <Ionicons name="call-outline" size={18} color={theme.colors.danger} />
+          </View>
+          <View style={styles.emergencyCopy}>
+            <Text style={styles.emergencyTitle}>Risco de vida? Ligue 192</Text>
+            <Text style={styles.emergencyText}>SAMU — não escolha atendimento pela distância.</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={theme.colors.danger} />
+        </Pressable>
 
         {busy && (
-          <View style={styles.center}>
+          <View style={styles.statePanel} accessibilityLiveRegion="polite">
             <ActivityIndicator
               accessibilityLabel={
                 status.state === 'locating' ? 'Obtendo localização' : 'Carregando unidades'
               }
-              color={theme.colors.primary}
+              color={theme.colors.accent}
             />
-            <Text style={styles.centerText}>
-              {status.state === 'locating' ? 'Obtendo sua localização...' : 'Consultando o CNES...'}
+            <Text style={styles.stateTitle}>
+              {status.state === 'locating' ? 'Encontrando você' : 'Consultando o CNES'}
             </Text>
+            <Text style={styles.stateBody}>Isso pode levar alguns segundos.</Text>
           </View>
         )}
 
         {!busy && empty && (
-          <View style={styles.empty}>
-            <Ionicons name={empty.icon} size={26} color={theme.colors.textMuted} />
-            <Text style={styles.emptyTitle}>{empty.title}</Text>
-            <Text style={styles.emptyBody}>{empty.body}</Text>
-            <View style={styles.emptyActions}>
+          <View style={styles.statePanel}>
+            <View style={styles.stateIcon}>
+              <Ionicons name={empty.icon} size={22} color={theme.colors.text} />
+            </View>
+            <Text style={styles.stateTitle}>{empty.title}</Text>
+            <Text style={styles.stateBody}>{empty.body}</Text>
+            <View style={styles.stateActions}>
               <Pressable
                 accessibilityRole="button"
                 onPress={onRetry}
-                style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.darkButton, pressed && styles.pressed]}
               >
-                <Text style={styles.buttonText}>Tentar novamente</Text>
+                <Text style={styles.darkButtonText}>Tentar novamente</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 onPress={onChangeUf}
-                style={({ pressed }) => [styles.inlineSecondary, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.lightButton, pressed && styles.pressedSurface]}
               >
-                <Text style={styles.secondaryButtonText}>Escolher estado</Text>
+                <Text style={styles.lightButtonText}>Escolher estado</Text>
               </Pressable>
             </View>
           </View>
         )}
 
         {!busy && status.state === 'error' && (
-          <View style={styles.empty}>
-            <Ionicons name="alert-circle-outline" size={26} color={theme.colors.danger} />
-            <Text style={styles.emptyTitle}>Algo deu errado</Text>
-            <Text style={styles.emptyBody}>{status.message}</Text>
+          <View style={styles.statePanel}>
+            <View style={styles.stateIcon}>
+              <Ionicons name="alert-circle-outline" size={22} color={theme.colors.danger} />
+            </View>
+            <Text style={styles.stateTitle}>Não foi possível carregar</Text>
+            <Text style={styles.stateBody}>{status.message}</Text>
             <Pressable
               accessibilityRole="button"
               onPress={onRetry}
-              style={({ pressed }) => [styles.inlineButton, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.darkButton, pressed && styles.pressed]}
             >
-              <Text style={styles.buttonText}>Tentar novamente</Text>
+              <Text style={styles.darkButtonText}>Tentar novamente</Text>
             </Pressable>
           </View>
         )}
 
         {!busy && status.state === 'ready' && upas.length === 0 && (
-          <View style={styles.empty}>
-            <Ionicons name="search-outline" size={26} color={theme.colors.textMuted} />
-            <Text style={styles.emptyTitle}>Nenhuma unidade num raio de 60 km</Text>
-            <Text style={styles.emptyBody}>
-              Confirme se o estado selecionado corresponde a onde você está.
-            </Text>
+          <View style={styles.statePanel}>
+            <View style={styles.stateIcon}>
+              <Ionicons name="search-outline" size={22} color={theme.colors.text} />
+            </View>
+            <Text style={styles.stateTitle}>Nada encontrado em 60 km</Text>
+            <Text style={styles.stateBody}>Confira o estado selecionado ou tente novamente.</Text>
           </View>
         )}
 
         {!busy && upas.length > 0 && (
           <>
-            <View style={styles.waitNotice}>
-              <Ionicons name="time-outline" size={15} color={theme.colors.textMuted} />
-              <Text style={styles.waitNoticeText}>
-                Tempo de fila não é exibido: não existe fonte pública nacional em tempo real. As
-                distâncias são em linha reta, não pelo trajeto de carro.
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionLabel}>{hasDistances ? 'MAIS PRÓXIMAS' : 'NO ESTADO'}</Text>
+                <Text style={styles.sectionTitle}>
+                  {upas.length} {upas.length === 1 ? 'unidade' : 'unidades'}
+                </Text>
+              </View>
+              <Text style={styles.sectionMeta}>{hasDistances ? 'até 60 km' : uf?.name ?? 'CNES'}</Text>
+            </View>
+
+            <View style={styles.dataNotice}>
+              <Ionicons name="information-circle-outline" size={17} color={theme.colors.textMuted} />
+              <Text style={styles.dataNoticeText}>
+                Fila não informada. Distâncias em linha reta; horários podem exigir confirmação.
               </Text>
             </View>
 
             <View style={styles.list}>
               {upas.map((upa) => (
-                <UpaCard key={upa.id} upa={upa} theme={theme} />
+                <UpaCard key={upa.id} theme={theme} upa={upa} />
               ))}
             </View>
           </>
         )}
 
         <Pressable
-          accessibilityRole="button"
           accessibilityLabel="Abrir o assistente"
+          accessibilityRole="button"
           onPress={onOpenChat}
-          style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.assistantCard, pressed && styles.pressedSurface]}
         >
-          <Text style={styles.buttonText}>Abrir o assistente</Text>
+          <View style={styles.assistantIcon}>
+            <Ionicons name="chatbubble-outline" size={20} color={theme.colors.text} />
+          </View>
+          <View style={styles.assistantCopy}>
+            <Text style={styles.assistantTitle}>Pergunte ao assistente</Text>
+            <Text style={styles.assistantText}>Encontre a unidade mais próxima em uma conversa.</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={theme.colors.text} />
         </Pressable>
-
-        <Text style={styles.notice}>
-          Em caso de emergência com risco de vida, ligue 192 (SAMU) e não escolha a unidade pela
-          distância.
-        </Text>
       </View>
     </ScrollView>
   );
@@ -194,88 +261,202 @@ export function HomeScreen({
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
-    scrollContent: { paddingBottom: spacing.lg },
+    scrollContent: { paddingBottom: spacing.xl },
     content: {
       alignSelf: 'center',
-      maxWidth: 560,
+      maxWidth: 600,
       paddingHorizontal: spacing.md,
       width: '100%',
     },
     header: {
       alignItems: 'center',
-      borderBottomColor: theme.colors.border,
-      borderBottomWidth: 1,
       flexDirection: 'row',
       justifyContent: 'space-between',
-      minHeight: 64,
+      minHeight: 72,
     },
-    title: {
+    brand: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+    brandMark: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.primaryStrong,
+      borderRadius: radii.md,
+      height: 42,
+      justifyContent: 'center',
+      width: 42,
+    },
+    brandName: {
       color: theme.colors.text,
       fontFamily: typography.bold,
-      fontSize: 21,
+      fontSize: 14,
+      letterSpacing: 1.1,
+      lineHeight: 16,
+    },
+    brandSuffix: {
+      color: theme.colors.textMuted,
+      fontFamily: typography.regular,
+      fontSize: 12,
+      lineHeight: 14,
     },
     ufButton: {
       alignItems: 'center',
+      backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: radii.md,
       borderWidth: 1,
       flexDirection: 'row',
-      gap: 5,
-      minHeight: 40,
-      paddingHorizontal: 12,
+      gap: 6,
+      minHeight: 48,
+      paddingHorizontal: 13,
     },
     ufText: {
-      color: theme.colors.primary,
+      color: theme.colors.text,
       fontFamily: typography.bold,
       fontSize: 13,
     },
+    hero: { paddingBottom: spacing.xl, paddingTop: spacing.xl },
+    eyebrow: {
+      color: theme.colors.accent,
+      fontFamily: typography.bold,
+      fontSize: 11,
+      letterSpacing: 1.5,
+    },
     heading: {
       color: theme.colors.text,
-      fontFamily: typography.bold,
-      fontSize: 24,
-      marginTop: spacing.lg,
+      fontFamily: typography.display,
+      fontSize: 40,
+      letterSpacing: -1.2,
+      lineHeight: 45,
+      marginTop: 10,
+      maxWidth: 420,
     },
     description: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
-      fontSize: 14,
-      lineHeight: 21,
-      marginTop: 4,
+      fontSize: 15,
+      lineHeight: 23,
+      marginTop: 12,
+      maxWidth: 470,
     },
-    center: { alignItems: 'center', gap: spacing.sm, marginVertical: 48 },
-    centerText: {
+    emergency: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surface,
+      borderColor: theme.colors.border,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 12,
+      minHeight: 76,
+      padding: 14,
+    },
+    emergencyIcon: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.warningSoft,
+      borderRadius: radii.md,
+      height: 44,
+      justifyContent: 'center',
+      width: 44,
+    },
+    emergencyCopy: { flex: 1 },
+    emergencyTitle: {
+      color: theme.colors.danger,
+      fontFamily: typography.bold,
+      fontSize: 14,
+    },
+    emergencyText: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
-      fontSize: 14,
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: 2,
     },
-    empty: {
+    statePanel: {
       alignItems: 'flex-start',
+      backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: radii.lg,
       borderWidth: 1,
-      gap: spacing.sm,
-      marginTop: spacing.lg,
-      padding: spacing.md,
+      gap: 9,
+      marginTop: spacing.md,
+      padding: spacing.lg,
     },
-    emptyTitle: {
+    stateIcon: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceRaised,
+      borderRadius: radii.md,
+      height: 44,
+      justifyContent: 'center',
+      width: 44,
+    },
+    stateTitle: {
       color: theme.colors.text,
       fontFamily: typography.bold,
-      fontSize: 16,
+      fontSize: 17,
     },
-    emptyBody: {
+    stateBody: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
       fontSize: 14,
       lineHeight: 21,
     },
-    emptyActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-    waitNotice: {
+    stateActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 4 },
+    darkButton: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.primaryStrong,
+      borderRadius: radii.md,
+      justifyContent: 'center',
+      minHeight: 48,
+      paddingHorizontal: 16,
+    },
+    darkButtonText: {
+      color: theme.isDark ? theme.colors.background : '#FFFFFF',
+      fontFamily: typography.bold,
+      fontSize: 14,
+    },
+    lightButton: {
+      alignItems: 'center',
+      borderColor: theme.colors.border,
+      borderRadius: radii.md,
+      borderWidth: 1,
+      justifyContent: 'center',
+      minHeight: 48,
+      paddingHorizontal: 16,
+    },
+    lightButtonText: {
+      color: theme.colors.text,
+      fontFamily: typography.bold,
+      fontSize: 14,
+    },
+    sectionHeader: {
+      alignItems: 'flex-end',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: spacing.xl,
+    },
+    sectionLabel: {
+      color: theme.colors.accent,
+      fontFamily: typography.bold,
+      fontSize: 10,
+      letterSpacing: 1.4,
+    },
+    sectionTitle: {
+      color: theme.colors.text,
+      fontFamily: typography.display,
+      fontSize: 27,
+      lineHeight: 33,
+      marginTop: 2,
+    },
+    sectionMeta: {
+      color: theme.colors.textMuted,
+      fontFamily: typography.regular,
+      fontSize: 12,
+      marginBottom: 4,
+    },
+    dataNotice: {
       alignItems: 'flex-start',
       flexDirection: 'row',
-      gap: 6,
-      marginTop: spacing.lg,
+      gap: 7,
+      marginTop: spacing.md,
     },
-    waitNoticeText: {
+    dataNoticeText: {
       color: theme.colors.textMuted,
       flex: 1,
       fontFamily: typography.regular,
@@ -283,48 +464,39 @@ const createStyles = (theme: AppTheme) =>
       lineHeight: 18,
     },
     list: { marginTop: spacing.md },
-    button: {
+    assistantCard: {
       alignItems: 'center',
-      backgroundColor: theme.colors.primaryStrong,
-      borderRadius: 8,
-      justifyContent: 'center',
-      marginTop: spacing.lg,
-      minHeight: 50,
-      paddingHorizontal: spacing.md,
-    },
-    inlineButton: {
-      alignItems: 'center',
-      backgroundColor: theme.colors.primaryStrong,
-      borderRadius: 8,
-      justifyContent: 'center',
-      minHeight: 48,
-      paddingHorizontal: spacing.md,
-    },
-    inlineSecondary: {
-      alignItems: 'center',
+      backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
-      borderRadius: 8,
+      borderRadius: radii.lg,
       borderWidth: 1,
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: spacing.md,
+      minHeight: 80,
+      padding: 14,
+    },
+    assistantIcon: {
+      alignItems: 'center',
+      backgroundColor: theme.colors.surfaceRaised,
+      borderRadius: radii.md,
+      height: 44,
       justifyContent: 'center',
-      minHeight: 48,
-      paddingHorizontal: spacing.md,
+      width: 44,
     },
-    buttonText: {
-      color: theme.isDark ? '#102018' : '#FFFFFF',
+    assistantCopy: { flex: 1 },
+    assistantTitle: {
+      color: theme.colors.text,
       fontFamily: typography.bold,
       fontSize: 15,
     },
-    secondaryButtonText: {
-      color: theme.colors.primary,
-      fontFamily: typography.bold,
-      fontSize: 15,
-    },
-    pressed: { opacity: 0.7 },
-    notice: {
+    assistantText: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
       fontSize: 12,
-      lineHeight: 18,
-      marginTop: spacing.md,
+      lineHeight: 17,
+      marginTop: 2,
     },
+    pressed: { opacity: 0.62 },
+    pressedSurface: { backgroundColor: theme.colors.surfaceRaised },
   });

@@ -176,7 +176,7 @@ function AppContent() {
         </View>
       </SafeAreaView>
 
-      <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.tabBar }}>
+      <SafeAreaView edges={['bottom']} style={{ backgroundColor: theme.colors.background }}>
         <BottomNav activeTab={activeTab} onChange={setActiveTab} theme={theme} />
       </SafeAreaView>
 

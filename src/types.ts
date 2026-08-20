@@ -15,6 +15,8 @@ export type Upa = {
   lastUpdated?: string | null;
   distanceKm?: number | null;
   locationPrecision: LocationPrecision;
+  openNow?: boolean | null;
+  openingPrecision?: 'exata' | 'estimada' | 'desconhecida';
 
   /** Reservado para integrações municipais de fila. Hoje sempre nulo. */
   waitMinutes?: number | null;

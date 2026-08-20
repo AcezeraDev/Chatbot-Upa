@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { AppTheme } from '../theme';
-import { typography } from '../theme';
+import { radii, typography } from '../theme';
 
 export type AppTab = 'home' | 'chat' | 'about';
 
@@ -32,7 +32,11 @@ export function BottomNav({ activeTab, onChange, theme }: BottomNavProps) {
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             onPress={() => onChange(tab.id)}
-            style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.tab,
+              active && styles.activeTab,
+              pressed && styles.pressed,
+            ]}
           >
             <Ionicons
               name={tab.icon}
@@ -51,18 +55,25 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: {
       backgroundColor: theme.colors.tabBar,
-      borderTopColor: theme.colors.border,
-      borderTopWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: radii.lg,
+      borderWidth: 1,
+      alignSelf: 'center',
       flexDirection: 'row',
+      marginBottom: 8,
+      maxWidth: 560,
+      overflow: 'hidden',
+      width: '94%',
     },
+    activeTab: { backgroundColor: theme.colors.surfaceRaised },
     tab: {
       alignItems: 'center',
       flex: 1,
       justifyContent: 'center',
-      minHeight: 58,
-      paddingVertical: 6,
+      minHeight: 60,
+      paddingVertical: 8,
     },
-    pressed: { opacity: 0.55 },
+    pressed: { backgroundColor: theme.colors.surfaceRaised },
     label: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
@@ -70,7 +81,7 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 3,
     },
     activeLabel: {
-      color: theme.colors.primary,
+      color: theme.colors.text,
       fontFamily: typography.bold,
     },
   });

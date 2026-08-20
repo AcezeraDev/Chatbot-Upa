@@ -1,262 +1,631 @@
 # UPA Agora
 
-Aplicativo que localiza **unidades de pronto atendimento reais** e as ordena pela
-distância até você. Os dados vêm do CNES (Cadastro Nacional de Estabelecimentos
-de Saúde), pela API pública de dados abertos do Ministério da Saúde.
+O **UPA Agora** é um aplicativo que encontra unidades de pronto atendimento reais e ajuda a pessoa a decidir para onde ir com informações do **CNES (Cadastro Nacional de Estabelecimentos de Saúde)**.
 
-## O que o app faz
+O app pode ser executado no navegador, em um celular com Expo Go ou como aplicativo Android. Para começar a desenvolver, a forma mais simples é usar a versão web e o navegador integrado do VS Code.
 
-- Pede sua localização e lista as unidades de pronto atendimento mais próximas.
-- Mostra nome, endereço, bairro, horário de funcionamento e telefone reais.
-- Abre a rota no mapa e liga para a unidade com um toque.
-- Assistente determinístico que responde qual é a unidade mais próxima.
-- Triagem de emergência: diante de sinais de risco, orienta ligar 192 (SAMU) em
-  vez de comparar unidades.
+## O que o aplicativo faz
 
-## O que o app não faz — e por quê
+- Solicita a localização do usuário.
+- Consulta unidades de pronto atendimento reais cadastradas no CNES.
+- Ordena as unidades pela distância em linha reta.
+- Mostra endereço, bairro, telefone e horário informado no cadastro.
+- Informa se a unidade está aberta, fechada ou com horário a confirmar.
+- Abre a rota no aplicativo de mapas.
+- Abre o telefone para ligar para a unidade.
+- Permite escolher o estado manualmente quando a localização não está disponível.
+- Oferece um assistente para encontrar unidades por conversa.
+- Detecta mensagens de emergência e orienta ligar para o SAMU no número 192.
 
-**Não exibe tempo de fila.** Não existe fonte pública nacional de fila em tempo
-real. Algumas prefeituras publicam painéis próprios (DF, Londrina, Lajeado,
-entre outras), mas não há padrão nacional. Exibir um número estimado como se
-fosse real levaria alguém à unidade errada numa urgência, então o campo fica
-vazio e o motivo é explicado na tela Projeto.
+## Limites importantes
 
-O modelo de dados já tem `waitMinutes` e `waitSource` reservados para quando uma
-integração municipal for feita.
+O UPA Agora procura ser honesto sobre o que os dados permitem afirmar:
 
-## Qualidade dos dados do CNES
+- **Não mostra tempo de fila.** Não existe uma fonte pública nacional de filas em tempo real.
+- **A distância é em linha reta.** Ela pode ser diferente do trajeto por ruas.
+- **Algumas coordenadas do CNES podem ser imprecisas.** O app mostra um aviso quando identifica esse caso.
+- **Alguns horários são estimados.** Quando não há certeza, o app pede que a pessoa ligue antes de sair.
+- Em caso de risco de vida, a orientação é ligar para o **192 (SAMU)**, e não escolher uma unidade apenas pela distância.
 
-Duas limitações reais, medidas sobre o estado de São Paulo (537 registros):
+## Tecnologias utilizadas
 
-- **~5% das unidades não têm coordenada** no cadastro. Elas são omitidas: sem
-  latitude e longitude não há como calcular distância.
-- **~1,5% têm a coordenada do centro do município**, não a do endereço. O
-  sintoma é um amontoado de unidades no mesmo ponto com CEPs de distritos
-  diferentes. O app detecta esses casos, marca a unidade com um aviso e a
-  rebaixa no fim da lista, em vez de afirmar uma distância errada.
+### Aplicativo
 
-A heurística está em `backend/app/cnes.py` (`detect_unreliable_coordinates`) e
-pode gerar falso positivo em região central densa — o aviso à toa é preferível
-ao erro silencioso.
+- React Native
+- Expo
+- TypeScript
+- React Native Web
 
-## O backend em produção
+### Backend
 
-**https://backend-roan-five-70.vercel.app**
+- Python 3.11 ou superior
+- FastAPI
+- Pydantic
+- HTTPX
+- SDK oficial da OpenAI e GPT-5.6 Luna opcional
 
-Não é preciso instalar nada para usá-lo: o aplicativo aponta para esse endereço
-e funciona em qualquer rede. A página inicial explica o serviço em português e
-permite consultá-lo ao vivo; `/docs` traz a referência técnica.
+### Dados
 
-Endpoints:
+- API de Dados Abertos do Ministério da Saúde
+- Cadastro Nacional de Estabelecimentos de Saúde (CNES)
 
-| Rota | O que faz |
-|------|-----------|
-| `GET /` | Página inicial, em português, com consulta ao vivo |
-| `GET /health` | Verificação de saúde |
-| `GET /api/meta` | Quantos estados e unidades o cadastro tem, e quando foi gerado |
-| `GET /api/ufs` | Estados, para o seletor manual |
-| `GET /api/upas?uf=SP` | Unidades do estado, em ordem alfabética |
-| `GET /api/upas/nearby?lat=&lon=&uf=SP` | Unidades mais próximas, com distância |
-| `POST /api/chat` | Assistente determinístico |
+## Estrutura do projeto
 
-## Rodar o backend na sua máquina
+```text
+upa-agora/
+├── App.tsx                 # Estado principal e navegação do aplicativo
+├── app.json                # Configuração do Expo
+├── package.json            # Dependências e comandos do aplicativo
+├── src/
+│   ├── components/         # Cartões, navegação e seletor de estado
+│   ├── screens/            # Início, Chat e Projeto
+│   ├── services/           # Comunicação com a API e localização
+│   ├── theme.ts            # Cores, tipografia e espaçamentos
+│   └── types.ts            # Tipos TypeScript
+├── backend/
+│   ├── app/                # API FastAPI e regras do domínio
+│   ├── data/cnes/          # Cadastro do CNES incluído no projeto
+│   ├── scripts/            # Atualização do cadastro embarcado
+│   └── tests/              # Testes automatizados do backend
+├── android/                # Projeto Android gerado pelo Expo
+└── design-system/          # Decisões e referências visuais
+```
 
-Só é necessário para desenvolver. Requer Python 3.11+.
+## Mapa detalhado dos arquivos
+
+Esta seção serve como guia para quem precisa descobrir **onde fazer uma alteração**. Os arquivos estão agrupados pela parte do sistema a que pertencem.
+
+### Arquivos da raiz
+
+| Arquivo | O que faz e por que existe |
+|---|---|
+| `.env.example` | Modelo das variáveis públicas do aplicativo. Mostra qual endereço de API deve ser colocado no `.env` local. |
+| `.gitignore` | Impede que dependências, ambientes locais, caches, APKs e arquivos com configuração pessoal sejam enviados ao Git. |
+| `app.json` | Configuração principal do Expo: nome do app, identificadores Android/iOS, orientação, tema e permissões de localização. |
+| `App.tsx` | Ponto central do aplicativo. Mantém a aba ativa, localização, UF, unidades, estados de carregamento e histórico do chat; também conecta as telas e o seletor de estado. |
+| `package.json` | Declara as dependências JavaScript e os comandos `start`, `web`, `android`, `typecheck` e `export:web`. |
+| `package-lock.json` | Registra as versões exatas instaladas pelo npm para que todos os colegas recebam a mesma árvore de dependências. É atualizado pelo npm e não deve ser editado manualmente. |
+| `tsconfig.json` | Ativa e configura a verificação TypeScript. O projeto usa modo estrito e alerta sobre acesso inseguro a posições de arrays. |
+| `README.md` | Manual de produto, instalação, execução, testes e arquitetura para a equipe. |
+
+### Aplicativo: `src`
+
+| Arquivo | O que faz e por que existe |
+|---|---|
+| `src/types.ts` | Define os contratos TypeScript compartilhados: unidade, UF, coordenadas, mensagens, status de carregamento e precisão dos dados. |
+| `src/theme.ts` | Fonte única de cores, tipografia, espaçamentos e raios. Mantém o visual consistente e oferece temas claro e escuro. |
+| `src/env.d.ts` | Informa ao TypeScript que a variável `EXPO_PUBLIC_API_URL` pode ser lida por `process.env`. |
+| `src/services/api.ts` | Centraliza todas as chamadas ao backend, aplica timeout, monta os parâmetros, reduz a precisão da coordenada enviada e valida respostas de unidades. |
+| `src/services/location.ts` | Solicita permissão, obtém a posição do aparelho e tenta descobrir cidade e estado com geocoding reverso local. |
+| `src/screens/HomeScreen.tsx` | Tela inicial. Apresenta o produto, estados de localização/erro, aviso do SAMU e a lista de unidades. |
+| `src/screens/ChatScreen.tsx` | Interface do assistente. Guarda o texto sendo digitado, envia mensagens, mostra respostas, sugestões, carregamento e destaque de emergência. |
+| `src/screens/AboutScreen.tsx` | Tela Projeto. Explica a fonte dos dados, limites, privacidade e decisões responsáveis do aplicativo. |
+| `src/components/UpaCard.tsx` | Cartão de uma unidade. Formata distância e horário, mostra precisão, abre rota no mapa e inicia ligação telefônica. |
+| `src/components/UfPicker.tsx` | Modal inferior com os 27 estados. É usado quando a UF precisa ser escolhida ou trocada manualmente. |
+| `src/components/BottomNav.tsx` | Navegação inferior entre Início, Chat e Projeto, com papéis e rótulos de acessibilidade. |
+
+### Backend: configuração e entrada
+
+| Arquivo | O que faz e por que existe |
+|---|---|
+| `backend/pyproject.toml` | Define o pacote Python, a versão mínima do Python, dependências do backend, dependências de teste e configuração do pytest. |
+| `backend/requirements.txt` | Lista simples das dependências usadas no deploy da Vercel. |
+| `backend/.env.example` | Exemplo das variáveis privadas do backend, como origens CORS, chave OpenAI, modelo e esforço de raciocínio. |
+| `backend/.gitignore` | Ignora a pasta local criada pela CLI da Vercel. |
+| `backend/.vercelignore` | Exclui testes, scripts, caches e ambiente virtual do pacote enviado para a Vercel. |
+| `backend/vercel.json` | Encaminha todas as rotas recebidas pela Vercel para a função Python. |
+| `backend/api/index.py` | Entrypoint serverless esperado pela Vercel. Apenas importa e expõe o aplicativo FastAPI real. |
+
+### Backend: regras e serviços em `backend/app`
+
+| Arquivo | O que faz e por que existe |
+|---|---|
+| `backend/app/__init__.py` | Marca `app` como pacote Python. |
+| `backend/app/main.py` | Cria o FastAPI, configura CORS e cabeçalhos, trata validações e declara todos os endpoints HTTP. |
+| `backend/app/models.py` | Define os modelos Pydantic de unidades, estados, requisições e respostas. É o contrato oficial da API. |
+| `backend/app/cnes.py` | Cliente e adaptador do CNES. Lê seed/cache, busca páginas da API, converte registros, remove unidades inválidas e detecta coordenadas suspeitas. |
+| `backend/app/repository.py` | Implementa as consultas usadas pelo produto: lista por UF, proximidade, limite de 60 km, ordenação, horário atual e filtro de unidades abertas. |
+| `backend/app/geo.py` | Contém o cálculo de Haversine para medir a distância em linha reta entre duas coordenadas. |
+| `backend/app/schedule.py` | Interpreta as descrições de turno do CNES e determina `openNow` no fuso horário de cada estado. |
+| `backend/app/ufs.py` | Mantém os 27 estados, siglas e códigos IBGE; também resolve uma UF recebida por sigla ou nome. |
+| `backend/app/domain.py` | Regras determinísticas do assistente, incluindo detecção de emergência, resposta do SAMU e textos sobre unidades e fila. |
+| `backend/app/assistant.py` | Coordena a OpenAI Responses API com GPT-5.6 Luna e o fallback determinístico. Define a ferramenta de busca, limita rodadas e impede que o modelo invente unidades. |
+| `backend/app/ratelimit.py` | Limita requisições por IP e por janela de tempo, com teto menor no endpoint de chat. |
+| `backend/app/static/home.html` | Página HTML apresentada na raiz do backend. Permite demonstrar a API, consultar unidades e testar o assistente sem o app React Native. |
+
+### Dados do CNES
+
+| Arquivo ou padrão | O que faz e por que existe |
+|---|---|
+| `backend/data/cnes/gerado-em.json` | Registra quando o seed foi gerado, quantos registros foram obtidos e se alguma UF falhou na atualização. |
+| `backend/data/cnes/upas-uf-XX.json` | Um arquivo por estado, usando o código IBGE no nome. Guarda os registros brutos do CNES que acompanham o deploy. Os 27 arquivos têm a mesma finalidade. |
+| `backend/scripts/build_cnes_seed.py` | Baixa novamente os dados de todas as UFs e atualiza os JSONs. Preserva o arquivo anterior quando uma resposta estadual falha ou vem vazia. |
+
+Os JSONs do CNES são dados gerados. Mudanças neles devem ser feitas pelo script, não manualmente.
+
+### Testes do backend
+
+| Arquivo | O que verifica |
+|---|---|
+| `backend/tests/conftest.py` | Cria fixtures compartilhadas, ajusta imports e prepara o cliente de testes. |
+| `backend/tests/test_api.py` | Testa endpoints, validações, distâncias, erros, CORS, cabeçalhos, horário e ausência de tempo de fila inventado. |
+| `backend/tests/test_assistant.py` | Confirma a integração OpenAI sem tocar na rede, as travas do modelo, o uso de unidades reais, os limites da ferramenta e o fallback para regras fixas. |
+| `backend/tests/test_cnes_client.py` | Testa paginação, conversão, descarte de registros, seed, falhas externas e detecção de coordenadas imprecisas. |
+| `backend/tests/test_domain.py` | Testa detecção de emergência e evita que mensagens comuns sejam classificadas incorretamente. |
+| `backend/tests/test_ratelimit.py` | Testa limites por cliente, teto específico do chat e controle da memória usada pelo limitador. |
+| `backend/tests/test_schedule.py` | Testa vocabulário de turnos, faixas de horário, fim de semana e fusos brasileiros. |
+
+### Design e arquivos de apoio
+
+| Arquivo | O que faz e por que existe |
+|---|---|
+| `design-system/upa-agora/MASTER.md` | Registra a direção visual geral, paleta, tipografia, espaçamento e regras de acessibilidade. |
+| `design-system/upa-agora/pages/simple-mvp.md` | Substitui partes do design geral para a versão enxuta de demonstração do aplicativo. |
+| `output/android/qr-upa-agora.png` | Imagem de QR code mantida como material de apoio Android. Não participa da execução do app. |
+
+### Pastas e arquivos gerados localmente
+
+Estes itens podem aparecer depois que os comandos são executados, mas não fazem parte do código que a equipe deve editar:
+
+| Caminho | Como é criado e para que serve |
+|---|---|
+| `node_modules/` | Criado por `npm install`; contém as dependências JavaScript. |
+| `.expo/` | Criado por `npx expo start`; guarda estado local do servidor Expo. |
+| `.env` | Criado pelo desenvolvedor a partir de `.env.example`; guarda a configuração local do app. |
+| `dist/` | Criado por `npm run export:web`; contém a exportação web de produção. |
+| `backend/.venv/` | Criado por `python -m venv`; contém o ambiente Python local. |
+| `backend/.cache/` | Cache gravável dos dados CNES durante o desenvolvimento. |
+| `backend/__pycache__/` | Bytecode temporário gerado pelo Python. |
+| `android/` | Projeto nativo gerado pelo Expo para compilar Android. Nesta base ele pode existir localmente, mas está ignorado pelo Git da raiz. |
+| `build.log` | Registro local de uma compilação Android. Serve para diagnóstico e não deve ser versionado. |
+
+---
+
+# Como rodar o aplicativo pela primeira vez
+
+Este é o caminho recomendado para quem acabou de baixar o projeto. Ele executa o aplicativo localmente, mas utiliza o backend já publicado.
+
+## 1. Instale os programas necessários
+
+Você precisa ter:
+
+- [Git](https://git-scm.com/downloads)
+- [Node.js 22 LTS](https://nodejs.org/)
+- [Visual Studio Code](https://code.visualstudio.com/)
+
+Python só é necessário se você também quiser executar o backend localmente.
+
+Confirme a instalação no terminal:
+
+```powershell
+git --version
+node --version
+npm --version
+```
+
+## 2. Baixe e abra o projeto
+
+Se você recebeu o endereço do repositório Git:
+
+```powershell
+git clone <URL_DO_REPOSITORIO>
+cd upa-agora
+code .
+```
+
+Se a pasta já está no computador, abra o VS Code, selecione **File > Open Folder** e escolha a pasta `upa-agora`.
+
+Todos os comandos do aplicativo devem ser executados na pasta raiz, onde estão `package.json` e `App.tsx`.
+
+## 3. Instale as dependências
+
+Abra o terminal integrado do VS Code com **Terminal > New Terminal** ou com `Ctrl + `` e execute:
+
+```powershell
+npm install
+```
+
+Esse comando cria a pasta `node_modules`, que não é enviada para o Git porque pode ser reconstruída em qualquer máquina.
+
+## 4. Crie o arquivo de ambiente
+
+Na raiz do projeto, copie `.env.example` para `.env`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+O arquivo de exemplo já aponta para o backend publicado:
+
+```env
+EXPO_PUBLIC_API_URL=https://backend-roan-five-70.vercel.app
+```
+
+O prefixo `EXPO_PUBLIC_` significa que esse valor faz parte do aplicativo. Nunca coloque senhas ou chaves privadas em variáveis com esse prefixo.
+
+## 5. Inicie a versão web
+
+Execute:
+
+```powershell
+npm run web -- --clear
+```
+
+Na primeira execução o Expo pode levar um pouco mais de tempo para montar o bundle. Aguarde até aparecer no terminal uma linha parecida com:
+
+```text
+Web: http://localhost:8081
+```
+
+Mantenha esse terminal aberto enquanto estiver trabalhando.
+
+## 6. Abra no navegador integrado do VS Code
+
+O VS Code atual possui um navegador integrado e não precisa de extensão para abrir o app.
+
+1. Pressione `Ctrl + Shift + P` para abrir a Command Palette.
+2. Procure por **Browser: Open Integrated Browser**.
+3. Digite `http://localhost:8081` na barra de endereço.
+
+Também é possível usar:
+
+- O menu **View > Browser**.
+- O atalho `Ctrl + Alt + /` no Windows e Linux.
+- O link `http://localhost:8081` exibido no terminal, quando o VS Code estiver configurado para abrir links locais no navegador integrado.
+
+Em versões antigas do VS Code, o comando pode aparecer como **Simple Browser: Show**.
+
+### Localização no navegador
+
+No navegador, a localização ou o geocoding reverso podem não estar disponíveis. Isso não impede o desenvolvimento:
+
+1. Clique no botão **Estado** no topo do aplicativo.
+2. Escolha uma UF.
+3. O app carregará as unidades cadastradas daquele estado.
+
+Quando existem coordenadas disponíveis, as unidades são ordenadas por distância. Sem coordenadas, o app apresenta a lista do estado sem afirmar qual é a mais próxima.
+
+---
+
+# A pasta `.expo` não existe. O que fazer?
+
+Isso é **normal em um projeto recém-clonado**.
+
+A pasta `.expo` contém informações temporárias da máquina de cada desenvolvedor. Por esse motivo, ela está no `.gitignore` e não deve ser enviada para o repositório.
+
+Você não precisa criar `.expo` manualmente. O Expo cria a pasta automaticamente quando o servidor de desenvolvimento é iniciado.
+
+Na raiz do projeto, execute:
+
+```powershell
+npm install
+npm run web -- --clear
+```
+
+Ou, para iniciar o Expo sem escolher uma plataforma imediatamente:
+
+```powershell
+npx expo start --clear
+```
+
+Depois que o Metro iniciar, a pasta `.expo` será criada automaticamente.
+
+Se ela ainda não aparecer:
+
+1. Confirme que o terminal está na pasta que contém `package.json`.
+2. Confirme que `npm install` terminou sem erros.
+3. Feche outros processos usando a porta 8081.
+4. Execute `npx expo start --clear` novamente.
+5. Verifique se o antivírus ou as permissões da pasta estão impedindo a criação de arquivos.
+
+Não copie a pasta `.expo` de outro colega: ela contém estado específico da máquina dele e não é uma dependência do projeto.
+
+---
+
+# Como rodar o backend localmente
+
+Esta parte é necessária apenas para quem vai alterar a API, o processamento do CNES, os horários ou o assistente.
+
+Você precisará de **Python 3.11 ou superior**.
+
+## 1. Crie o ambiente Python
+
+Abra um novo terminal do VS Code:
 
 ```powershell
 cd backend
 python -m venv .venv
-.venv\Scripts\python -m pip install -e ".[dev]"
-.venv\Scripts\python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Não há download de dados na primeira execução: o cadastro do CNES vem no
-repositório, em `backend/data/cnes/` (27 estados, 2061 unidades). Isso existe
-porque em ambiente serverless não há disco persistente — o cache gravável nasce
-vazio a cada partida e baixar um estado inteiro dentro da requisição seria lento
-demais. A ordem de leitura é memória, cache gravável, cadastro embarcado e, só
-então, busca ao vivo no CNES.
+Não é obrigatório ativar o ambiente virtual. Os comandos abaixo chamam o Python correto diretamente.
 
-Para atualizar o cadastro (o CNES publica mensalmente), rode antes do deploy:
+## 2. Instale o backend e as dependências de desenvolvimento
 
 ```powershell
-cd backend
-.venv\Scripts\python scripts/build_cnes_seed.py
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-## Rodar o app
+## 3. Libere o frontend local no CORS
 
-O endereço do backend vem do arquivo `.env` (copie de `.env.example`, que já
-aponta para produção — assim o app funciona sem subir nada localmente):
+O backend fecha o CORS por padrão. Antes de iniciá-lo, informe quais endereços locais podem fazer requisições:
 
-```bash
-EXPO_PUBLIC_API_URL=https://backend-roan-five-70.vercel.app
+```powershell
+$env:CORS_ORIGINS = "http://localhost:8081,http://127.0.0.1:8081"
 ```
 
-Para falar com um backend local, troque pelo endereço da sua máquina. Depois de
-alterar o `.env`, rode com `--clear` — o Metro embute o valor em tempo de build
-e mantém cache:
+Essa variável vale apenas para o terminal atual.
 
-```bash
+### Ative o GPT-5.6 Luna (opcional)
+
+O assistente funciona por regras fixas mesmo sem uma chave. Para habilitar as respostas redigidas pelo GPT-5.6 Luna, crie uma chave em [OpenAI API keys](https://platform.openai.com/api-keys) e defina as variáveis no mesmo terminal do backend:
+
+```powershell
+$env:OPENAI_API_KEY = "SUA_CHAVE_PRIVADA"
+$env:OPENAI_MODEL = "gpt-5.6-luna"
+$env:OPENAI_REASONING_EFFORT = "low"
+```
+
+`low` prioriza uma resposta rápida e econômica para o chat. Também são aceitos `none`, `medium`, `high`, `xhigh` e `max`.
+
+O arquivo `backend/.env.example` serve como referência dos nomes, mas o projeto não lê um `.env` do backend automaticamente. As variáveis devem estar no terminal ou configuradas no serviço de hospedagem.
+
+Nunca envie a chave ao Git e nunca use `EXPO_PUBLIC_OPENAI_API_KEY`: qualquer variável `EXPO_PUBLIC_` fica exposta no aplicativo.
+
+## 4. Inicie a API
+
+Ainda dentro de `backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Verifique no navegador:
+
+- Página do serviço: `http://127.0.0.1:8000`
+- Documentação da API: `http://127.0.0.1:8000/docs`
+- Saúde do serviço: `http://127.0.0.1:8000/health`
+
+## 5. Aponte o aplicativo para o backend local
+
+Volte à raiz do projeto e altere o `.env`:
+
+```env
+EXPO_PUBLIC_API_URL=http://127.0.0.1:8000
+```
+
+Depois reinicie o Expo, pois as variáveis `EXPO_PUBLIC_` são incorporadas ao bundle:
+
+```powershell
 npm run web -- --clear
 ```
 
-No navegador, o app pede a permissão de localização mas não consegue descobrir o
-estado (o geocoding reverso não existe na web). Ele mostra o seletor de estado, e
-a distância passa a ser calculada normalmente depois da escolha.
+Agora o fluxo local fica assim:
 
-## Ligar o assistente com modelo de linguagem
-
-O assistente funciona sem nenhuma configuração, respondendo por regras fixas.
-Para que ele converse, defina uma chave do Google Gemini
-([obtenha em aistudio.google.com/apikey](https://aistudio.google.com/apikey)):
-
-```powershell
-$env:GEMINI_API_KEY = "sua-chave"
+```text
+Navegador do VS Code
+        │
+        ▼
+Expo Web em localhost:8081
+        │
+        ▼
+FastAPI em 127.0.0.1:8000
+        │
+        ▼
+Cadastro CNES em backend/data/cnes
 ```
 
-Em produção, no Vercel, adicione a variável em Settings → Environment Variables
-e faça um novo deploy. O modelo padrão é `gemini-3.7-flash`; para trocar, defina
-`GEMINI_MODEL`.
+## macOS e Linux
 
-Três garantias estruturam `app/assistant.py`, e vale conhecê-las antes de mexer:
-
-**A triagem de emergência nunca passa pelo modelo.** Diante de sinal de risco à
-vida, a resposta é 192/SAMU, vinda de `domain.py`, por regra fixa e auditável.
-Um modelo pode suavizar o alerta ou falhar em reconhecê-lo, e numa urgência a
-demora é o dano.
-
-**O modelo não conhece nenhuma unidade.** Ele só obtém unidades chamando a
-ferramenta `buscar_unidades_proximas`, que consulta o cadastro real, e redige em
-cima do que voltou. As coordenadas vêm da requisição, nunca do modelo. Sem essa
-amarra, um modelo de linguagem inventa nome, endereço e telefone plausíveis — o
-pior erro possível neste aplicativo.
-
-**Falha do modelo não derruba o serviço.** Chave inválida, cota esgotada, rede
-fora ou formato inesperado caem na resposta determinística. Quem perguntou
-recebe algo correto em vez de um erro.
-
-Custo, para dimensionar: o `gemini-3.7-flash` custa US$ 0,75 por milhão de
-tokens de entrada e US$ 3,75 de saída até 31/12/2026, dobrando depois. Há também
-um nível gratuito, com limite de requisições.
-
-## Aberto agora
-
-Cada unidade traz `openNow` (`true`, `false` ou `null`) e `openingPrecision`.
-O parâmetro `abertas=true` em `/api/upas/nearby` descarta as sabidamente
-fechadas; as de horário indeterminado permanecem, porque escondê-las tiraria da
-lista unidades que podem estar abertas.
-
-Às três da manhã isso importa mais que distância: **16% das unidades não
-funcionam 24 horas**, e apresentar uma delas como "a mais próxima" na
-madrugada é o mesmo erro do tempo de fila inventado.
-
-O campo `descricao_turno_atendimento` do CNES parece texto livre, mas só tem 7
-valores distintos em 2061 unidades — vocabulário fechado, classificável com
-segurança. A precisão da resposta reflete o que dá para saber:
-
-| `openingPrecision` | Quando | O que significa |
-|---|---|---|
-| `exata` | Atendimento contínuo de 24 horas (84%) | Certeza, não há o que estimar |
-| `estimada` | Atende por turnos, em dia de semana | Faixas derivadas de horários oficiais: manhã 07h–12h, tarde 12h–19h, noite 19h–22h |
-| `desconhecida` | Turnos intermitentes, campo vazio, ou dentro do horário num fim de semana | `openNow` vem `null`; não afirmamos nada |
-
-As faixas não são convenção nossa. Somadas, reproduzem os horários publicados:
-manhã+tarde dá **07h–19h**, o padrão de 12 horas contínuas do [Programa Saúde na
-Hora](https://www.gov.br/saude/pt-br/composicao/saps/saude-na-hora) ([Portaria nº
-397/GM/MS de 2020](https://bvsms.saude.gov.br/bvs/saudelegis/gm/2020/prt0397_16_03_2020.html))
-e das [AMAs de São Paulo](https://prefeitura.sp.gov.br/web/saude/w/atencao_basica/ama/1911);
-somando a noite dá **07h–22h**, o formato praticado no Distrito Federal.
-
-Sobre os dias da semana: a descrição do CNES para atendimento contínuo diz
-"inclui sábados, domingos e feriados", e só ela diz isso. O Saúde na Hora exige
-segunda a sexta, com fim de semana só em parte dos formatos, e as AMAs abrem de
-segunda a sábado. Dia de semana é garantido, fim de semana varia por unidade e o
-cadastro não distingue — então, dentro do horário e em fim de semana, a resposta
-é `null`. Fora do horário a unidade está fechada em qualquer dia, porque nenhum
-formato de turno abre de madrugada.
-
-O cálculo usa o fuso do estado da unidade, não um fuso único: o Brasil tem
-quatro, e o Acre está três horas atrás de São Paulo — justamente onde há menos
-unidades para escolher. Por isso o `tzdata` é dependência.
-
-A marcação é feita na consulta, nunca no cache. As unidades ficam em memória
-por 24 horas, e gravar o `openNow` no objeto cacheado faria o app responder
-"aberta" de madrugada porque alguém consultou à tarde.
-
-## Limite de requisições
-
-A API é pública e sem autenticação. Cada IP tem, por minuto, 120 requisições
-nos endpoints de leitura e 10 no `/api/chat` — o assistente é o caro, porque
-cada mensagem pode virar uma chamada paga ao modelo. Passado o teto a resposta
-é `429` com `Retry-After`. O `/health` e a página inicial não são limitados,
-para não bloquear monitoramento nem a própria página.
-
-Os tetos são ajustáveis por variável de ambiente: `RATE_LIMIT_READ`,
-`RATE_LIMIT_CHAT` e `RATE_LIMIT_WINDOW`.
-
-**O que este limite não é.** A contagem vive na memória do processo, e em
-serverless há várias instâncias que não se conversam — então o teto real é por
-instância e zera a cada partida fria. Isso barra laço acidental e abuso
-ingênuo, que é o risco concreto aqui, mas não é defesa contra ataque
-distribuído. Para um teto global seria preciso armazenamento compartilhado
-(Redis, Vercel KV) ou o firewall da plataforma.
-
-## Gerar o APK Android
-
-```powershell
-cd android
-.\gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
-```
-
-O APK sai em `android/app/build/outputs/apk/release/`, com cerca de 29 MB.
-
-Duas exigências do ambiente, ambas descobertas do jeito difícil:
-
-**Use JDK 17 ou 21, não a JBR do Android Studio.** A JBR atual é JDK 25, e a
-partir do JDK 24 a JVM imprime `WARNING: A restricted method in
-java.lang.System has been called` no stderr. O plugin Android trata isso como
-erro fatal no passo do Prefab e o build morre com uma mensagem que não explica
-nada.
-
-**Não construa dentro de pasta sincronizada (OneDrive, Dropbox).** O
-sincronizador transforma arquivos de build em placeholders de nuvem e mantém
-handles abertos, o que produz `not a regular file`, `Unable to delete
-directory` e `AccessDeniedException` em pontos aleatórios. Redirecionar o
-diretório de build por init script do Gradle não resolve: os `CMakeLists.txt`
-dos módulos nativos do React Native têm `../../../build/generated/...` escrito
-na mão e o codegen deixa de ser encontrado. A única saída é construir fora da
-pasta sincronizada.
-
-O `-PreactNativeArchitectures=arm64-v8a` restringe a compilação nativa a uma
-arquitetura em vez de quatro, o que corta o tempo de build em cerca de 4x. Cobre
-qualquer aparelho de 2016 em diante, mas não roda em emulador x86 — remova o
-parâmetro se precisar de um APK universal.
-
-## Testes
+Os comandos equivalentes para o backend são:
 
 ```bash
-cd backend && .venv\Scripts\python -m pytest
+cd backend
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e ".[dev]"
+CORS_ORIGINS="http://localhost:8081,http://127.0.0.1:8081" \
+OPENAI_API_KEY="SUA_CHAVE_PRIVADA" \
+OPENAI_MODEL="gpt-5.6-luna" \
+OPENAI_REASONING_EFFORT="low" \
+  .venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-22 testes cobrem a paginação do CNES, o descarte de unidades sem coordenada, a
-detecção de coordenadas não confiáveis, a ordenação por distância, a triagem de
-emergência e a garantia de que nenhum tempo de fila é inventado.
+As três linhas `OPENAI_` são opcionais. Remova-as para usar somente o modo determinístico.
 
-Verificação de tipos do app:
+---
 
-```bash
+# Como abrir no celular durante o desenvolvimento
+
+Para testar em um celular sem gerar APK, instale o **Expo Go** no aparelho.
+
+Na raiz do projeto, execute:
+
+```powershell
+npm run start
+```
+
+O terminal mostrará um QR code.
+
+1. Conecte o computador e o celular à mesma rede Wi-Fi.
+2. Abra o Expo Go no Android e use **Scan QR code**.
+3. No iPhone, leia o QR code com a câmera.
+
+Se a rede bloquear a conexão, tente o modo tunnel:
+
+```powershell
+npx expo start --tunnel
+```
+
+O tunnel costuma ser mais lento e deve ser usado apenas quando a conexão pela rede local não funcionar.
+
+Se o aplicativo estiver usando um backend local, `127.0.0.1` não funcionará no celular: esse endereço apontaria para o próprio telefone. Nesse caso, use o IP do computador no `.env`, por exemplo:
+
+```env
+EXPO_PUBLIC_API_URL=http://192.168.0.10:8000
+```
+
+Ao iniciar o backend para acesso pelo celular, use:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Talvez seja necessário permitir o Python no Firewall do Windows.
+
+---
+
+# Comandos usados no dia a dia
+
+Execute os comandos do app na raiz do projeto:
+
+| Comando | Para que serve |
+|---|---|
+| `npm install` | Instala ou atualiza as dependências do projeto |
+| `npm run start` | Inicia o Metro e mostra o QR code |
+| `npm run web` | Inicia diretamente a versão web |
+| `npm run web -- --clear` | Inicia a versão web limpando o cache |
+| `npm run android` | Compila e abre a versão Android de desenvolvimento |
+| `npm run typecheck` | Verifica os tipos TypeScript |
+| `npm run export:web` | Gera a versão web de produção em `dist` |
+
+Comandos do backend, executados dentro de `backend`:
+
+| Comando | Para que serve |
+|---|---|
+| `.venv\Scripts\python.exe -m uvicorn app.main:app --reload` | Inicia a API local |
+| `.venv\Scripts\python.exe -m pytest` | Executa os testes do backend |
+| `.venv\Scripts\python.exe scripts/build_cnes_seed.py` | Atualiza o cadastro CNES embarcado |
+
+---
+
+# Testes antes de enviar uma alteração
+
+## Aplicativo
+
+Na raiz:
+
+```powershell
 npm run typecheck
 ```
 
-## Privacidade
+## Backend
 
-A localização é usada apenas para calcular distâncias e não é armazenada. O
-estado é resolvido pelo próprio aparelho; ao backend seguem apenas a coordenada
-e a sigla do estado, necessárias para o cálculo.
+Dentro de `backend`:
 
-## Limites do protótipo
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
 
-Sem banco de dados, autenticação, LLM ou integração com fila municipal. A
-distância é em linha reta, não pelo trajeto de carro. O assistente responde por
-regras determinísticas, o que mantém o comportamento auditável.
+Antes de abrir um pull request ou entregar mudanças para outro colega, execute pelo menos essas duas verificações.
+
+---
+
+# Endpoints da API
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `GET` | `/` | Página de apresentação do backend |
+| `GET` | `/health` | Verifica se o serviço está funcionando |
+| `GET` | `/api/meta` | Metadados do cadastro e hora do servidor |
+| `GET` | `/api/ufs` | Lista os estados disponíveis |
+| `GET` | `/api/upas?uf=SP` | Lista unidades de um estado |
+| `GET` | `/api/upas/nearby?lat=&lon=&uf=SP` | Lista unidades por proximidade |
+| `POST` | `/api/chat` | Responde mensagens do assistente |
+
+## Como os dados são carregados
+
+O backend procura os dados nesta ordem:
+
+1. Cache em memória.
+2. Cache gravável em disco.
+3. Cadastro CNES incluído em `backend/data/cnes`.
+4. API pública do CNES, se nenhum dado local estiver disponível.
+
+O cadastro embarcado permite que a API serverless responda rapidamente sem baixar um estado inteiro durante uma requisição.
+
+## Assistente
+
+O assistente funciona sem chave de IA usando regras determinísticas.
+
+Se `OPENAI_API_KEY` estiver configurada no ambiente do backend, o GPT-5.6 Luna pode redigir as respostas pela OpenAI Responses API. Mesmo nesse modo:
+
+- A triagem de emergência acontece antes do modelo.
+- O modelo não escolhe coordenadas.
+- Nomes e endereços só podem vir da ferramenta que consulta o CNES.
+- Falhas do modelo voltam para a resposta determinística.
+- As requisições usam `store=False`, portanto o backend não pede à API que armazene as respostas.
+
+Configuração padrão:
+
+```env
+OPENAI_MODEL=gpt-5.6-luna
+OPENAI_REASONING_EFFORT=low
+```
+
+Não coloque `OPENAI_API_KEY` no `.env` do aplicativo nem em uma variável `EXPO_PUBLIC_`. Em produção, cadastre a chave como variável secreta do backend na plataforma de hospedagem.
+
+---
+
+# Solução de problemas
+
+## `http://localhost:8081` não abre
+
+- Aguarde o Metro terminar o primeiro bundle.
+- Confirme no terminal qual porta foi usada.
+- Execute novamente com `npm run web -- --clear`.
+- Verifique se outro programa já está usando a porta 8081.
+
+## A pasta `.expo` não aparece
+
+- Execute os comandos na raiz do projeto.
+- Rode `npm install` antes do Expo.
+- Inicie com `npx expo start --clear`.
+- Não crie nem copie `.expo` manualmente.
+
+## O app abre, mas não carrega unidades
+
+- Confira o valor de `EXPO_PUBLIC_API_URL` no `.env`.
+- Abra `/health` no endereço do backend.
+- Se alterou `.env`, reinicie o Expo com `--clear`.
+- Se o backend é local, configure `CORS_ORIGINS` antes de iniciar o Uvicorn.
+
+## O navegador não encontra a localização
+
+Isso pode acontecer na versão web. Escolha o estado manualmente pelo botão no topo da tela.
+
+## O celular não encontra o backend local
+
+- Não use `127.0.0.1` no `.env` do celular.
+- Use o IP do computador na rede local.
+- Inicie o Uvicorn com `--host 0.0.0.0`.
+- Verifique o Firewall do Windows.
+
+## O app continua usando o endereço antigo da API
+
+O Expo guarda variáveis públicas no bundle. Pare o servidor e execute:
+
+```powershell
+npm run web -- --clear
+```
+
+---
+
+# Regras para trabalhar em equipe
+
+- Não envie `.env`, `.expo`, `node_modules`, `.venv`, caches ou arquivos de build para o Git.
+- Nunca coloque chaves ou senhas no código.
+- Preserve o princípio de não inventar tempo de fila.
+- Não apresente uma coordenada imprecisa como exata.
+- Mantenha a orientação de emergência independente da IA generativa.
+- Execute o typecheck e os testes antes de compartilhar mudanças.
+- Atualize este README quando o processo de instalação ou execução mudar.
+
+## Documentação oficial útil
+
+- [Começar o desenvolvimento com Expo](https://docs.expo.dev/get-started/start-developing/)
+- [Executar projetos Expo na web](https://docs.expo.dev/workflow/web/)
+- [Expo CLI](https://docs.expo.dev/more/expo-cli/)
+- [Navegador integrado do VS Code](https://code.visualstudio.com/docs/debugtest/integrated-browser)
+- [Guia oficial do GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6)
+- [Function calling na OpenAI Responses API](https://developers.openai.com/api/docs/guides/function-calling)
