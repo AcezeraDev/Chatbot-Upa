@@ -150,7 +150,6 @@ function AppContent() {
           <HomeScreen
             city={city}
             onChangeUf={() => setPickerVisible(true)}
-            onOpenChat={() => setActiveTab('chat')}
             onRefresh={handleRefresh}
             onRetry={locateAndLoad}
             refreshing={refreshing}

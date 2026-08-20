@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { AppTheme } from '../theme';
-import { radii, typography } from '../theme';
+import { typography } from '../theme';
 
 export type AppTab = 'home' | 'chat' | 'about';
 
@@ -15,7 +15,7 @@ type BottomNavProps = {
 const tabs: Array<{ id: AppTab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
   { id: 'home', label: 'Início', icon: 'home-outline' },
   { id: 'chat', label: 'Chat', icon: 'chatbubble-outline' },
-  { id: 'about', label: 'Projeto', icon: 'information-circle-outline' },
+  { id: 'about', label: 'Sobre', icon: 'information-circle-outline' },
 ];
 
 export function BottomNav({ activeTab, onChange, theme }: BottomNavProps) {
@@ -55,30 +55,27 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: {
       backgroundColor: theme.colors.tabBar,
-      borderColor: theme.colors.border,
-      borderRadius: radii.lg,
-      borderWidth: 1,
+      borderTopColor: theme.colors.border,
+      borderTopWidth: 1,
       alignSelf: 'center',
       flexDirection: 'row',
-      marginBottom: 8,
       maxWidth: 560,
-      overflow: 'hidden',
-      width: '94%',
+      width: '100%',
     },
-    activeTab: { backgroundColor: theme.colors.surfaceRaised },
+    activeTab: {},
     tab: {
       alignItems: 'center',
       flex: 1,
       justifyContent: 'center',
-      minHeight: 60,
-      paddingVertical: 8,
+      minHeight: 58,
+      paddingVertical: 7,
     },
-    pressed: { backgroundColor: theme.colors.surfaceRaised },
+    pressed: { opacity: 0.55 },
     label: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
       fontSize: 12,
-      marginTop: 3,
+      marginTop: 2,
     },
     activeLabel: {
       color: theme.colors.text,

@@ -8,6 +8,8 @@ import type { Upa } from '../types';
 type UpaCardProps = {
   upa: Upa;
   theme: AppTheme;
+  first?: boolean;
+  last?: boolean;
 };
 
 const formatDistance = (km: number): string =>
@@ -44,47 +46,24 @@ const getOpeningLabel = (upa: Upa): { text: string; tone: 'open' | 'closed' | 'u
       tone: 'open',
     };
   }
-  if (upa.openNow === false) {
-    return { text: 'Fechada agora', tone: 'closed' };
-  }
+  if (upa.openNow === false) return { text: 'Fechada agora', tone: 'closed' };
   return { text: 'Horário a confirmar', tone: 'unknown' };
 };
 
-export function UpaCard({ upa, theme }: UpaCardProps) {
+export function UpaCard({ upa, theme, first = false, last = false }: UpaCardProps) {
   const styles = createStyles(theme);
   const approximate = upa.locationPrecision === 'aproximada';
   const opening = getOpeningLabel(upa);
-
-  const distanceLabel =
-    upa.distanceKm === null || upa.distanceKm === undefined
+  const distance =
+    upa.distanceKm === null || upa.distanceKm === undefined || approximate
       ? null
-      : approximate
-        ? 'Local impreciso'
-        : formatDistance(upa.distanceKm);
+      : formatDistance(upa.distanceKm);
 
   return (
-    <View
-      accessible
-      accessibilityLabel={[
-        upa.name,
-        opening.text,
-        `${upa.address}, ${upa.neighborhood}`,
-        distanceLabel && !approximate ? `a ${distanceLabel} em linha reta` : null,
-        approximate ? 'endereço cadastrado de forma imprecisa no CNES' : null,
-      ]
-        .filter(Boolean)
-        .join('. ')}
-      style={styles.card}
-    >
-      <View style={styles.headerRow}>
+    <View style={[styles.row, first && styles.firstRow, last && styles.lastRow]}>
+      <View style={styles.header}>
         <Text style={styles.name}>{upa.name}</Text>
-        {distanceLabel && (
-          <View style={[styles.distanceBadge, approximate && styles.distanceBadgeWarning]}>
-            <Text style={[styles.distance, approximate && styles.distanceWarning]}>
-              {distanceLabel}
-            </Text>
-          </View>
-        )}
+        {distance && <Text style={styles.distance}>{distance}</Text>}
       </View>
 
       <View style={styles.statusRow}>
@@ -104,6 +83,7 @@ export function UpaCard({ upa, theme }: UpaCardProps) {
         >
           {opening.text}
         </Text>
+        {distance && <Text style={styles.lineDistance}>· {distance} em linha reta</Text>}
       </View>
 
       <Text style={styles.address}>
@@ -111,27 +91,16 @@ export function UpaCard({ upa, theme }: UpaCardProps) {
       </Text>
 
       {upa.openingHours && (
-        <View style={styles.detailRow}>
-          <Ionicons name="time-outline" size={16} color={theme.colors.textMuted} />
-          <Text numberOfLines={2} style={styles.detailText}>
-            {formatOpeningHours(upa.openingHours)}
-          </Text>
-        </View>
+        <Text style={styles.detail}>
+          {formatOpeningHours(upa.openingHours)}
+        </Text>
       )}
-
-      {upa.phone && (
-        <View style={styles.detailRow}>
-          <Ionicons name="call-outline" size={16} color={theme.colors.textMuted} />
-          <Text style={styles.detailText}>{upa.phone}</Text>
-        </View>
-      )}
+      {upa.phone && <Text style={styles.detail}>{upa.phone}</Text>}
 
       {approximate && (
         <View style={styles.warning}>
-          <Ionicons name="warning-outline" size={16} color={theme.colors.warning} />
-          <Text style={styles.warningText}>
-            Coordenada imprecisa no CNES. Confira o endereço antes de ir.
-          </Text>
+          <Ionicons name="warning-outline" size={15} color={theme.colors.warning} />
+          <Text style={styles.warningText}>Localização imprecisa. Confira o endereço.</Text>
         </View>
       )}
 
@@ -144,10 +113,10 @@ export function UpaCard({ upa, theme }: UpaCardProps) {
         >
           <Ionicons
             name="navigate-outline"
-            size={18}
+            size={17}
             color={theme.isDark ? theme.colors.background : '#FFFFFF'}
           />
-          <Text style={styles.primaryActionText}>Ver rota</Text>
+          <Text style={styles.primaryActionText}>Rota</Text>
         </Pressable>
 
         {upa.phone && (
@@ -155,9 +124,9 @@ export function UpaCard({ upa, theme }: UpaCardProps) {
             accessibilityLabel={`Ligar para ${upa.name}`}
             accessibilityRole="button"
             onPress={() => callUnit(upa.phone!)}
-            style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressedSurface]}
           >
-            <Ionicons name="call-outline" size={18} color={theme.colors.text} />
+            <Ionicons name="call-outline" size={17} color={theme.colors.text} />
             <Text style={styles.secondaryActionText}>Ligar</Text>
           </Pressable>
         )}
@@ -168,15 +137,25 @@ export function UpaCard({ upa, theme }: UpaCardProps) {
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
-    card: {
+    row: {
       backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
-      borderRadius: radii.lg,
-      borderWidth: 1,
-      marginBottom: 12,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderTopWidth: 1,
       padding: spacing.md,
     },
-    headerRow: {
+    firstRow: {
+      borderTopLeftRadius: radii.lg,
+      borderTopRightRadius: radii.lg,
+    },
+    lastRow: {
+      borderBottomColor: theme.colors.border,
+      borderBottomWidth: 1,
+      borderBottomLeftRadius: radii.lg,
+      borderBottomRightRadius: radii.lg,
+    },
+    header: {
       alignItems: 'flex-start',
       flexDirection: 'row',
       gap: spacing.sm,
@@ -186,31 +165,25 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.text,
       flex: 1,
       fontFamily: typography.bold,
-      fontSize: 17,
-      lineHeight: 23,
+      fontSize: 16,
+      lineHeight: 22,
     },
-    distanceBadge: {
-      backgroundColor: theme.colors.surfaceRaised,
-      borderRadius: radii.pill,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-    },
-    distanceBadgeWarning: { backgroundColor: theme.colors.warningSoft },
     distance: {
       color: theme.colors.text,
       fontFamily: typography.bold,
-      fontSize: 12,
+      fontSize: 13,
+      lineHeight: 20,
     },
-    distanceWarning: { color: theme.colors.warning },
     statusRow: {
       alignItems: 'center',
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: 6,
-      marginTop: 8,
+      marginTop: 7,
     },
     statusDot: {
       backgroundColor: theme.colors.textMuted,
-      borderRadius: radii.pill,
+      borderRadius: 4,
       height: 7,
       width: 7,
     },
@@ -223,34 +196,30 @@ const createStyles = (theme: AppTheme) =>
     },
     statusTextOpen: { color: theme.colors.low },
     statusTextClosed: { color: theme.colors.danger },
-    address: {
+    lineDistance: {
       color: theme.colors.textMuted,
+      fontFamily: typography.regular,
+      fontSize: 12,
+    },
+    address: {
+      color: theme.colors.text,
       fontFamily: typography.regular,
       fontSize: 14,
-      lineHeight: 21,
+      lineHeight: 20,
       marginTop: 12,
     },
-    detailRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      gap: 8,
-      marginTop: 8,
-    },
-    detailText: {
+    detail: {
       color: theme.colors.textMuted,
-      flex: 1,
       fontFamily: typography.regular,
       fontSize: 13,
-      lineHeight: 18,
+      lineHeight: 19,
+      marginTop: 4,
     },
     warning: {
-      alignItems: 'flex-start',
-      backgroundColor: theme.colors.warningSoft,
-      borderRadius: radii.md,
+      alignItems: 'center',
       flexDirection: 'row',
-      gap: 8,
-      marginTop: 12,
-      padding: 10,
+      gap: 6,
+      marginTop: 9,
     },
     warningText: {
       color: theme.colors.warning,
@@ -261,19 +230,18 @@ const createStyles = (theme: AppTheme) =>
     },
     actions: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
       gap: spacing.sm,
-      marginTop: spacing.md,
+      marginTop: 14,
     },
     primaryAction: {
       alignItems: 'center',
       backgroundColor: theme.colors.primaryStrong,
       borderRadius: radii.md,
+      flex: 1,
       flexDirection: 'row',
       gap: 7,
       justifyContent: 'center',
       minHeight: 48,
-      paddingHorizontal: 16,
     },
     primaryActionText: {
       color: theme.isDark ? theme.colors.background : '#FFFFFF',
@@ -285,16 +253,17 @@ const createStyles = (theme: AppTheme) =>
       borderColor: theme.colors.border,
       borderRadius: radii.md,
       borderWidth: 1,
+      flex: 1,
       flexDirection: 'row',
       gap: 7,
       justifyContent: 'center',
       minHeight: 48,
-      paddingHorizontal: 16,
     },
     secondaryActionText: {
       color: theme.colors.text,
       fontFamily: typography.bold,
       fontSize: 14,
     },
-    pressed: { opacity: 0.62 },
+    pressed: { opacity: 0.58 },
+    pressedSurface: { backgroundColor: theme.colors.surfaceRaised },
   });

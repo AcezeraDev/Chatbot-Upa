@@ -25,7 +25,7 @@ type ChatScreenProps = {
   onChangeMessages: (updater: (current: ChatMessage[]) => ChatMessage[]) => void;
 };
 
-const suggestions = ['Qual é a unidade mais perto?', 'Mostrar unidades próximas'];
+const suggestions = ['Qual é a unidade mais perto?'];
 
 export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: ChatScreenProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -91,35 +91,15 @@ export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: Ch
       style={styles.screen}
     >
       <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <View style={styles.brandMark}>
-            <Ionicons
-              name="medical-outline"
-              size={18}
-              color={theme.isDark ? theme.colors.background : '#FFFFFF'}
-            />
-          </View>
-          <View>
-            <Text style={styles.title}>Assistente</Text>
-            <Text style={styles.subtitle}>UPA Agora</Text>
-          </View>
-        </View>
-
-        <View style={styles.contextBadge}>
-          <Ionicons name="location-outline" size={14} color={theme.colors.textMuted} />
-          <Text style={styles.contextText}>{uf?.sigla ?? 'sem estado'}</Text>
-        </View>
+        <Text style={styles.title}>Assistente</Text>
+        <Text style={styles.contextText}>{uf?.sigla ?? 'Sem estado'}</Text>
       </View>
 
       {isInitial ? (
         <View style={styles.initialContent}>
-          <View style={styles.initialMark}>
-            <Ionicons name="chatbubble-ellipses-outline" size={30} color={theme.colors.text} />
-          </View>
           <Text style={styles.initialTitle}>Como posso ajudar?</Text>
           <Text style={styles.initialText}>
-            Pergunte pela unidade mais próxima. Endereço, telefone e distância vêm do cadastro
-            oficial do CNES.
+            Pergunte pela unidade mais próxima. Os dados vêm do CNES.
           </Text>
         </View>
       ) : (
@@ -184,7 +164,7 @@ export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: Ch
               style={({ pressed }) => [styles.suggestion, pressed && styles.pressedSurface]}
             >
               <Text style={styles.suggestionText}>{suggestion}</Text>
-              <Ionicons name="arrow-forward" size={17} color={theme.colors.text} />
+              <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
             </Pressable>
           ))}
         </View>
@@ -199,7 +179,7 @@ export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: Ch
             maxLength={500}
             multiline
             onChangeText={setInput}
-            placeholder="Como posso ajudar você?"
+            placeholder="Digite sua pergunta"
             placeholderTextColor={theme.colors.textMuted}
             style={styles.input}
             textAlignVertical="center"
@@ -236,72 +216,38 @@ const createStyles = (theme: AppTheme) =>
     header: {
       alignItems: 'center',
       alignSelf: 'center',
+      borderBottomColor: theme.colors.border,
+      borderBottomWidth: 1,
       flexDirection: 'row',
       justifyContent: 'space-between',
       maxWidth: 600,
-      minHeight: 72,
+      minHeight: 64,
       paddingHorizontal: spacing.md,
       width: '100%',
-    },
-    headerTitleRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
-    brandMark: {
-      alignItems: 'center',
-      backgroundColor: theme.colors.primaryStrong,
-      borderRadius: radii.md,
-      height: 40,
-      justifyContent: 'center',
-      width: 40,
     },
     title: {
       color: theme.colors.text,
       fontFamily: typography.bold,
-      fontSize: 15,
-      lineHeight: 18,
-    },
-    subtitle: {
-      color: theme.colors.textMuted,
-      fontFamily: typography.regular,
-      fontSize: 11,
-      lineHeight: 14,
-    },
-    contextBadge: {
-      alignItems: 'center',
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderRadius: radii.pill,
-      borderWidth: 1,
-      flexDirection: 'row',
-      gap: 5,
-      minHeight: 40,
-      paddingHorizontal: 12,
+      fontSize: 19,
+      lineHeight: 24,
     },
     contextText: {
       color: theme.colors.textMuted,
-      fontFamily: typography.medium,
-      fontSize: 12,
+      fontFamily: typography.regular,
+      fontSize: 13,
     },
     initialContent: {
-      alignItems: 'center',
+      alignItems: 'flex-start',
       flex: 1,
       justifyContent: 'center',
-      paddingHorizontal: spacing.xl,
-    },
-    initialMark: {
-      alignItems: 'center',
-      backgroundColor: theme.colors.surfaceRaised,
-      borderRadius: radii.lg,
-      height: 64,
-      justifyContent: 'center',
-      marginBottom: spacing.lg,
-      width: 64,
+      paddingHorizontal: spacing.md,
     },
     initialTitle: {
       color: theme.colors.text,
-      fontFamily: typography.display,
-      fontSize: 34,
-      letterSpacing: -0.7,
-      lineHeight: 41,
-      textAlign: 'center',
+      fontFamily: typography.bold,
+      fontSize: 26,
+      letterSpacing: -0.5,
+      lineHeight: 33,
     },
     initialText: {
       color: theme.colors.textMuted,
@@ -309,8 +255,7 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 14,
       lineHeight: 22,
       marginTop: 10,
-      maxWidth: 420,
-      textAlign: 'center',
+      maxWidth: 380,
     },
     messages: {
       alignSelf: 'center',
@@ -320,17 +265,15 @@ const createStyles = (theme: AppTheme) =>
       width: '100%',
     },
     message: {
-      borderRadius: radii.lg,
+      borderRadius: radii.md,
       marginBottom: 12,
       maxWidth: '88%',
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
     },
     assistantMessage: {
       alignSelf: 'flex-start',
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderWidth: 1,
+      paddingLeft: 0,
     },
     userMessage: {
       alignSelf: 'flex-end',
@@ -381,13 +324,12 @@ const createStyles = (theme: AppTheme) =>
     },
     suggestion: {
       alignItems: 'center',
-      backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
       borderRadius: radii.md,
       borderWidth: 1,
       flexDirection: 'row',
       justifyContent: 'space-between',
-      minHeight: 52,
+      minHeight: 48,
       paddingHorizontal: 14,
     },
     suggestionText: {
@@ -398,20 +340,22 @@ const createStyles = (theme: AppTheme) =>
     },
     composerOuter: {
       alignSelf: 'center',
+      borderTopColor: theme.colors.border,
+      borderTopWidth: 1,
       maxWidth: 600,
-      padding: 12,
+      padding: 10,
       width: '100%',
     },
     composer: {
       alignItems: 'center',
       backgroundColor: theme.colors.surface,
       borderColor: theme.colors.border,
-      borderRadius: radii.lg,
+      borderRadius: radii.md,
       borderWidth: 1,
       flexDirection: 'row',
       gap: spacing.sm,
-      minHeight: 68,
-      padding: 9,
+      minHeight: 56,
+      padding: 5,
     },
     input: {
       color: theme.colors.text,
@@ -421,14 +365,14 @@ const createStyles = (theme: AppTheme) =>
       lineHeight: 21,
       maxHeight: 112,
       minHeight: 48,
-      paddingHorizontal: 7,
-      paddingVertical: 9,
+      paddingHorizontal: 9,
+      paddingVertical: 7,
     },
     sendButton: {
       alignItems: 'center',
       alignSelf: 'flex-end',
       backgroundColor: theme.colors.primaryStrong,
-      borderRadius: radii.pill,
+      borderRadius: radii.md,
       height: 48,
       justifyContent: 'center',
       width: 48,
@@ -436,7 +380,7 @@ const createStyles = (theme: AppTheme) =>
     composerHint: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
-      fontSize: 11,
+      fontSize: 12,
       marginTop: 6,
       textAlign: 'center',
     },

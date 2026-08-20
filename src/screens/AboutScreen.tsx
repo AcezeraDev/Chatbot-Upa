@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { AppTheme } from '../theme';
-import { radii, spacing, typography } from '../theme';
+import { spacing, typography } from '../theme';
 
 type AboutScreenProps = {
   theme: AppTheme;
@@ -17,101 +17,55 @@ export function AboutScreen({ theme }: AboutScreenProps) {
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <View style={styles.brandMark}>
-            <Ionicons
-              name="information-outline"
-              size={20}
-              color={theme.isDark ? theme.colors.background : '#FFFFFF'}
-            />
-          </View>
-          <View>
-            <Text style={styles.headerTitle}>Projeto</Text>
-            <Text style={styles.headerSubtitle}>Como o UPA Agora funciona</Text>
-          </View>
+          <Text style={styles.headerTitle}>Sobre</Text>
         </View>
 
-        <View style={styles.hero}>
-          <Text style={styles.eyebrow}>SOBRE O APP</Text>
-          <Text style={styles.heading}>Dados reais. Sem promessas vazias.</Text>
+        <View style={styles.intro}>
+          <Text style={styles.heading}>Informação simples e responsável.</Text>
           <Text style={styles.lead}>
-            O UPA Agora encontra pronto atendimento com informação oficial e deixa claro tudo o
-            que não pode confirmar.
+            O UPA Agora encontra unidades reais e mostra claramente o que não pode confirmar.
           </Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionNumber}>01</Text>
-          <Text style={styles.sectionTitle}>Fonte oficial</Text>
+          <Text style={styles.sectionTitle}>Dados</Text>
           <Text style={styles.paragraph}>
-            Nome, endereço, telefone, horário e coordenadas vêm do CNES, o Cadastro Nacional de
-            Estabelecimentos de Saúde.
+            Nome, endereço, telefone, horário e coordenadas vêm do Cadastro Nacional de
+            Estabelecimentos de Saúde (CNES).
           </Text>
           <Pressable
             accessibilityHint="Abre o portal de dados do Ministério da Saúde"
             accessibilityLabel="Ver a fonte oficial do CNES"
             accessibilityRole="link"
             onPress={() => Linking.openURL(CNES_URL).catch(() => undefined)}
-            style={({ pressed }) => [styles.link, pressed && styles.pressedSurface]}
+            style={({ pressed }) => [styles.link, pressed && styles.pressed]}
           >
             <Text style={styles.linkText}>Abrir fonte oficial</Text>
-            <Ionicons name="open-outline" size={17} color={theme.colors.text} />
+            <Ionicons name="open-outline" size={16} color={theme.colors.text} />
           </Pressable>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionNumber}>02</Text>
-          <Text style={styles.sectionTitle}>Escolhas responsáveis</Text>
-          <View style={styles.bulletList}>
-            <View style={styles.bulletRow}>
-              <View style={styles.bullet} />
-              <Text style={styles.bulletText}>
-                Tempo de fila não é mostrado porque não existe uma fonte pública nacional em tempo
-                real.
-              </Text>
-            </View>
-            <View style={styles.bulletRow}>
-              <View style={styles.bullet} />
-              <Text style={styles.bulletText}>
-                A distância é em linha reta e pode ser diferente do trajeto pelas ruas.
-              </Text>
-            </View>
-            <View style={styles.bulletRow}>
-              <View style={styles.bullet} />
-              <Text style={styles.bulletText}>
-                Coordenadas suspeitas recebem um aviso para você conferir o endereço.
-              </Text>
-            </View>
-            <View style={styles.bulletRow}>
-              <View style={styles.bullet} />
-              <Text style={styles.bulletText}>
-                Horários estimados são apresentados como estimativa, nunca como certeza.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionNumber}>03</Text>
-          <Text style={styles.sectionTitle}>Assistente com limites</Text>
+          <Text style={styles.sectionTitle}>Limites</Text>
           <Text style={styles.paragraph}>
-            A triagem de emergência é sempre determinística. Quando a IA generativa está ativada,
-            ela só pode citar unidades recuperadas do CNES; se falhar, o app volta para regras
-            fixas.
+            Não exibimos tempo de fila. As distâncias são em linha reta e alguns horários ou
+            endereços precisam de confirmação.
           </Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionNumber}>04</Text>
-          <Text style={styles.sectionTitle}>Privacidade simples</Text>
+          <Text style={styles.sectionTitle}>Segurança</Text>
           <Text style={styles.paragraph}>
-            A localização serve apenas para calcular distâncias. Ela não é armazenada, e o estado
-            é identificado pelo próprio aparelho.
+            Emergências são tratadas por regras fixas. A IA só pode citar unidades recuperadas do
+            CNES e o aplicativo continua funcionando se ela falhar.
           </Text>
         </View>
 
-        <View style={styles.technology}>
-          <Text style={styles.technologyLabel}>CONSTRUÍDO COM</Text>
-          <Text style={styles.technologyText}>React Native · Expo · TypeScript · FastAPI · CNES</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Privacidade</Text>
+          <Text style={styles.paragraph}>
+            Sua localização é usada apenas para calcular distâncias e não é armazenada.
+          </Text>
         </View>
       </View>
     </ScrollView>
@@ -128,136 +82,65 @@ const createStyles = (theme: AppTheme) =>
       width: '100%',
     },
     header: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      gap: 10,
-      minHeight: 72,
-    },
-    brandMark: {
-      alignItems: 'center',
-      backgroundColor: theme.colors.primaryStrong,
-      borderRadius: radii.md,
-      height: 40,
+      borderBottomColor: theme.colors.border,
+      borderBottomWidth: 1,
       justifyContent: 'center',
-      width: 40,
+      minHeight: 64,
     },
     headerTitle: {
       color: theme.colors.text,
       fontFamily: typography.bold,
-      fontSize: 15,
-      lineHeight: 18,
+      fontSize: 19,
     },
-    headerSubtitle: {
-      color: theme.colors.textMuted,
-      fontFamily: typography.regular,
-      fontSize: 11,
-      lineHeight: 14,
-    },
-    hero: { paddingBottom: spacing.xl, paddingTop: spacing.xl },
-    eyebrow: {
-      color: theme.colors.accent,
-      fontFamily: typography.bold,
-      fontSize: 11,
-      letterSpacing: 1.5,
-    },
+    intro: { paddingBottom: spacing.xl, paddingTop: spacing.xl },
     heading: {
       color: theme.colors.text,
-      fontFamily: typography.display,
-      fontSize: 38,
-      letterSpacing: -1,
-      lineHeight: 44,
-      marginTop: 10,
-      maxWidth: 500,
+      fontFamily: typography.bold,
+      fontSize: 27,
+      letterSpacing: -0.6,
+      lineHeight: 34,
+      maxWidth: 440,
     },
     lead: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
       fontSize: 15,
-      lineHeight: 23,
-      marginTop: 14,
-      maxWidth: 500,
+      lineHeight: 22,
+      marginTop: 9,
+      maxWidth: 470,
     },
     section: {
       borderTopColor: theme.colors.border,
       borderTopWidth: 1,
       paddingVertical: spacing.lg,
     },
-    sectionNumber: {
-      color: theme.colors.accent,
-      fontFamily: typography.bold,
-      fontSize: 11,
-      letterSpacing: 1,
-    },
     sectionTitle: {
       color: theme.colors.text,
-      fontFamily: typography.display,
-      fontSize: 25,
-      lineHeight: 31,
-      marginTop: 6,
+      fontFamily: typography.bold,
+      fontSize: 17,
+      lineHeight: 23,
     },
     paragraph: {
       color: theme.colors.textMuted,
       fontFamily: typography.regular,
-      fontSize: 15,
-      lineHeight: 23,
-      marginTop: 10,
+      fontSize: 14,
+      lineHeight: 22,
+      marginTop: 7,
       maxWidth: 520,
     },
     link: {
       alignItems: 'center',
       alignSelf: 'flex-start',
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderRadius: radii.md,
-      borderWidth: 1,
       flexDirection: 'row',
       gap: spacing.sm,
-      justifyContent: 'center',
-      marginTop: spacing.md,
       minHeight: 48,
-      paddingHorizontal: 14,
+      marginTop: 8,
     },
     linkText: {
       color: theme.colors.text,
       fontFamily: typography.bold,
       fontSize: 14,
+      textDecorationLine: 'underline',
     },
-    bulletList: { gap: 12, marginTop: spacing.md },
-    bulletRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 10 },
-    bullet: {
-      backgroundColor: theme.colors.accent,
-      borderRadius: radii.pill,
-      height: 6,
-      marginTop: 8,
-      width: 6,
-    },
-    bulletText: {
-      color: theme.colors.textMuted,
-      flex: 1,
-      fontFamily: typography.regular,
-      fontSize: 14,
-      lineHeight: 22,
-    },
-    technology: {
-      backgroundColor: theme.colors.surface,
-      borderColor: theme.colors.border,
-      borderRadius: radii.lg,
-      borderWidth: 1,
-      marginTop: spacing.md,
-      padding: spacing.lg,
-    },
-    technologyLabel: {
-      color: theme.colors.accent,
-      fontFamily: typography.bold,
-      fontSize: 10,
-      letterSpacing: 1.4,
-    },
-    technologyText: {
-      color: theme.colors.text,
-      fontFamily: typography.medium,
-      fontSize: 14,
-      lineHeight: 21,
-      marginTop: 8,
-    },
-    pressedSurface: { backgroundColor: theme.colors.surfaceRaised },
+    pressed: { opacity: 0.55 },
   });
