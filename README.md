@@ -119,7 +119,7 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 
 | Arquivo | O que faz e por que existe |
 |---|---|
-| `backend/pyproject.toml` | Define o pacote Python, a versão mínima do Python, dependências do backend, dependências de teste e configuração do pytest. |
+| `backend/pyproject.toml` | Define o pacote Python, a versão mínima do Python, dependências do backend, dependências de teste e a configuração do pytest e do ruff. |
 | `backend/requirements.txt` | Lista simples das dependências usadas no deploy da Vercel. |
 | `backend/.env.example` | Referência dos nomes de configuração privada usados pelo backend. Não contém credenciais reais. |
 | `backend/.gitignore` | Ignora a pasta local criada pela CLI da Vercel. |
@@ -144,7 +144,7 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `backend/app/domain.py` | Regras determinísticas do assistente, incluindo detecção de emergência, resposta do SAMU e textos sobre unidades e fila. |
 | `backend/app/assistant.py` | Coordena a OpenAI Responses API, a busca CNES, a ferramenta opcional de rotas e o fallback determinístico. Limita rodadas e impede que o modelo invente unidades ou trajetos. |
 | `backend/app/ratelimit.py` | Limita requisições por IP e por janela de tempo, com teto menor no endpoint de chat. |
-| `backend/app/static/home.html` | Página HTML apresentada na raiz do backend. Permite demonstrar a API, consultar unidades e testar o assistente sem o app React Native. |
+| `backend/app/static/home.html` | Página HTML apresentada na raiz do backend. Permite demonstrar a API, consultar unidades por localização ou por CEP e testar o assistente sem o app React Native. |
 
 ### Dados do CNES
 
@@ -628,6 +628,7 @@ Comandos do backend, executados dentro de `backend`:
 |---|---|
 | `.venv\Scripts\python.exe -m uvicorn app.main:app --reload` | Inicia a API local |
 | `.venv\Scripts\python.exe -m pytest` | Executa os testes do backend |
+| `.venv\Scripts\python.exe -m ruff check .` | Verifica o backend em busca de erros e código desatualizado |
 | `.venv\Scripts\python.exe scripts/build_cnes_seed.py` | Atualiza o cadastro CNES embarcado |
 
 ---
@@ -644,13 +645,24 @@ npm run typecheck
 
 ## Backend
 
-Dentro de `backend`:
+Dentro de `backend`, os testes e o lint:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-Antes de abrir um pull request ou entregar mudanças para outro colega, execute pelo menos essas duas verificações.
+```powershell
+.\.venv\Scripts\python.exe -m ruff check .
+```
+
+O ruff está configurado no `pyproject.toml` com as regras que apontam erro de
+verdade — o padrão dele, mais `pyupgrade` e `bugbear`. As regras de estilo puro,
+como ordenação de import, ficam de fora de propósito: elas reescreveriam
+arquivos que ninguém está tocando e afogariam num diff de formatação o achado
+que realmente importa.
+
+Antes de abrir um pull request ou entregar mudanças para outro colega, execute
+pelo menos essas três verificações.
 
 ---
 

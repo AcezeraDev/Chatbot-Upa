@@ -101,6 +101,8 @@
   <div class="linha" id="cidades"></div>
   <div class="linha" style="margin-top:4px">
     <button id="btn-local">Usar minha localização</button>
+    <input id="cep" placeholder="ou o CEP: 00000-000" maxlength="9" inputmode="numeric" aria-label="CEP">
+    <button id="btn-cep">Usar CEP</button>
     <select id="uf" aria-label="Estado"></select>
     <label style="font-size:15px; color:var(--suave); display:flex; gap:6px; align-items:center">
       <input type="checkbox" id="so-abertas" style="flex:0 0 auto; width:auto">
@@ -182,6 +184,44 @@ $("btn-local").onclick = function () {
     },
     function () { $("btn-local").textContent = "Não consegui sua localização"; }
   );
+};
+
+// O CEP e a saida de quem nao quer (ou nao pode) liberar a localizacao. A
+// resposta ja traz a UF, entao o seletor de estado tambem se ajusta sozinho.
+$("btn-cep").onclick = function () {
+  const digitos = $("cep").value.replace(/\D/g, "");
+  const alvo = $("resultado");
+  if (digitos.length !== 8) {
+    alvo.innerHTML = '<div class="cartao vazio">Informe um CEP com oito dígitos.</div>';
+    return;
+  }
+
+  alvo.innerHTML = '<p class="vazio">Resolvendo o CEP…</p>';
+  fetch("/api/cep/" + digitos)
+    .then(function (r) {
+      if (r.status === 404) throw new Error("CEP não encontrado.");
+      if (!r.ok) throw new Error("Não foi possível consultar o CEP agora.");
+      return r.json();
+    })
+    .then(function (origem) {
+      if (typeof origem.latitude !== "number" || typeof origem.longitude !== "number") {
+        alvo.innerHTML =
+          '<div class="cartao vazio">Esse CEP não tem coordenada na base. Ele fica em ' +
+          escapar(origem.city) + " (" + escapar(origem.uf) + "), mas não dá para ordenar por distância.</div>";
+        return;
+      }
+      $("uf").value = origem.uf;
+      atual = {
+        lat: origem.latitude,
+        lon: origem.longitude,
+        uf: origem.uf,
+        rotulo: origem.city + " (CEP " + origem.cep + ")",
+      };
+      buscar();
+    })
+    .catch(function (erro) {
+      alvo.innerHTML = '<div class="cartao vazio">' + escapar(erro.message) + "</div>";
+    });
 };
 
 function selo(u) {

@@ -48,7 +48,7 @@ MAX_CACHED_CEPS = 512
 
 _CEP_PATTERN = re.compile(r"\b(\d{5})[-.\s]?(\d{3})\b")
 
-_cache: dict[str, "CepLocation"] = {}
+_cache: dict[str, CepLocation] = {}
 _cache_lock = threading.Lock()
 
 

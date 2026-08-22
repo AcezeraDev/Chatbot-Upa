@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -50,7 +50,7 @@ def main() -> int:
     (SEED_DIR / "gerado-em.json").write_text(
         json.dumps(
             {
-                "geradoEm": datetime.now(timezone.utc).isoformat(),
+                "geradoEm": datetime.now(UTC).isoformat(),
                 "registros": total_units,
                 "ufsComFalha": failures,
             },
