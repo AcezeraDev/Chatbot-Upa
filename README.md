@@ -74,7 +74,7 @@ upa-agora/
 ├── backend/
 │   ├── app/                # API FastAPI e regras do domínio
 │   ├── data/cnes/          # Cadastro do CNES incluído no projeto
-│   ├── scripts/            # Atualização do cadastro embarcado
+│   ├── scripts/            # Cadastro embarcado e verificação das integrações
 │   └── tests/              # Testes automatizados do backend
 ├── android/                # Projeto Android gerado pelo Expo
 └── design-system/          # Decisões e referências visuais
@@ -153,6 +153,7 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `backend/data/cnes/gerado-em.json` | Registra quando o seed foi gerado, quantos registros foram obtidos e se alguma UF falhou na atualização. |
 | `backend/data/cnes/upas-uf-XX.json` | Um arquivo por estado, usando o código IBGE no nome. Guarda os registros brutos do CNES que acompanham o deploy. Os 27 arquivos têm a mesma finalidade. |
 | `backend/scripts/build_cnes_seed.py` | Baixa novamente os dados de todas as UFs e atualiza os JSONs. Preserva o arquivo anterior quando uma resposta estadual falha ou vem vazia. |
+| `backend/scripts/smoke_openrouteservice.py` | Confere a integração de rotas contra a API real, coisa que os testes com transporte mockado não alcançam. Lê a chave do ambiente e nunca a imprime. |
 
 Os JSONs do CNES são dados gerados. Mudanças neles devem ser feitas pelo script, não manualmente.
 
@@ -630,6 +631,7 @@ Comandos do backend, executados dentro de `backend`:
 | `.venv\Scripts\python.exe -m pytest` | Executa os testes do backend |
 | `.venv\Scripts\python.exe -m ruff check .` | Verifica o backend em busca de erros e código desatualizado |
 | `.venv\Scripts\python.exe scripts/build_cnes_seed.py` | Atualiza o cadastro CNES embarcado |
+| `.venv\Scripts\python.exe scripts/smoke_openrouteservice.py` | Verifica a integração de rotas contra a API real |
 
 ---
 
@@ -663,6 +665,23 @@ que realmente importa.
 
 Antes de abrir um pull request ou entregar mudanças para outro colega, execute
 pelo menos essas três verificações.
+
+## Integrações externas
+
+Os testes acima usam transporte mockado: provam que o nosso código trata bem as
+respostas que **assumimos** que cada serviço dá. A BrasilAPI não precisa de
+verificação à parte, porque não usa chave e o próprio endpoint `/api/cep/{cep}`
+já sai batendo nela.
+
+O OpenRouteService precisa, e só dá para conferir com uma chave real:
+
+```powershell
+$env:OPENROUTESERVICE_API_KEY = "SUA_CHAVE_PRIVADA"
+.\.venv\Scripts\python.exe scripts\smoke_openrouteservice.py
+```
+
+Ele gasta duas chamadas da cota gratuita e verifica geocodificação, matriz de
+carro e matriz a pé. A chave é lida do ambiente e nunca aparece na saída.
 
 ---
 
