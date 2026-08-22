@@ -122,7 +122,7 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `backend/pyproject.toml` | Define o pacote Python, a versão mínima do Python, dependências do backend, dependências de teste e a configuração do pytest e do ruff. |
 | `backend/requirements.txt` | Lista simples das dependências usadas no deploy da Vercel. |
 | `backend/.env.example` | Referência dos nomes de configuração privada usados pelo backend. Não contém credenciais reais. |
-| `backend/.gitignore` | Ignora a pasta local criada pela CLI da Vercel. |
+| `backend/.gitignore` | Ignora restos locais dentro de `backend`. O link da CLI da Vercel agora fica na raiz, ignorado pelo `.gitignore` de lá. |
 | `backend/.vercelignore` | Exclui testes, scripts, caches e ambiente virtual do pacote enviado para a Vercel. |
 | `backend/vercel.json` | Encaminha todas as rotas recebidas pela Vercel para a função Python. |
 | `backend/api/index.py` | Entrypoint serverless esperado pela Vercel. Apenas importa e expõe o aplicativo FastAPI real. |
@@ -733,6 +733,42 @@ Mesmo nesse modo:
 - Falhas da BrasilAPI devolvem o comportamento anterior, sem erro para a pessoa.
 - Falhas do modelo voltam para a resposta determinística.
 - As requisições usam `store=False`, portanto o backend não pede à API que armazene as respostas.
+
+---
+
+# Como o backend é publicado
+
+O projeto na Vercel se chama `backend` e está ligado a este repositório. Duas
+configurações fazem isso funcionar e vale saber delas antes de mexer:
+
+- **Root Directory é `backend`.** O repositório tem o app Expo na raiz e a API
+  numa subpasta. Sem esse ajuste, um deploy vindo do GitHub tentaria buildar o
+  app Expo como se fosse FastAPI.
+- **Por causa disso, o `vercel` roda a partir da raiz do repositório**, não de
+  dentro de `backend`. O link fica em `.vercel/` na raiz.
+
+Todo push na `main` publica em produção automaticamente. Para publicar à mão,
+da raiz do projeto:
+
+```powershell
+vercel deploy --prod
+```
+
+Um deploy de preview, que não toca a produção, é o mesmo comando sem `--prod`.
+Previews ficam protegidos por login; para consultá-los use `vercel curl <url>`,
+que passa pela proteção.
+
+## Variáveis de ambiente
+
+Elas **não** vêm do `.env`: precisam estar cadastradas na Vercel.
+
+```powershell
+vercel env ls
+vercel env add OPENROUTESERVICE_API_KEY production
+```
+
+Depois de adicionar ou mudar qualquer variável é preciso um novo deploy — a
+função só lê o valor no momento em que é publicada.
 
 ---
 

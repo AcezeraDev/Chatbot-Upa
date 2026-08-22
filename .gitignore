@@ -15,3 +15,5 @@ backend/*.egg-info/
 output/android/*.apk
 output/qa/
 backend/.cache/
+# Link local do projeto na Vercel; nao pertence ao repositorio.
+.vercel
