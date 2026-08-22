@@ -193,10 +193,10 @@ def chat(payload: ChatRequest) -> ChatResponse:
     if payload.uf:
         _uf_code_or_400(payload.uf)
 
-    reply, kind = reply_to(
+    reply, kind, route_url = reply_to(
         payload.message,
         latitude=payload.latitude,
         longitude=payload.longitude,
         uf=payload.uf,
     )
-    return ChatResponse(reply=reply, kind=kind)
+    return ChatResponse(reply=reply, kind=kind, routeUrl=route_url)

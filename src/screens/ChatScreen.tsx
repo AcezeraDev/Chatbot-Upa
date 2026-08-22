@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -25,12 +26,13 @@ type ChatScreenProps = {
   onChangeMessages: (updater: (current: ChatMessage[]) => ChatMessage[]) => void;
 };
 
-const suggestions = ['Qual é a unidade mais perto?'];
+const suggestions = ['Qual UPA eu alcanço mais rápido de carro?'];
 
 export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: ChatScreenProps) {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
+  const [routeErrorFor, setRouteErrorFor] = useState<string | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const counter = useRef(0);
   const isInitial = messages.length === 1;
@@ -62,6 +64,7 @@ export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: Ch
           text: result.reply,
           createdAt: new Date().toISOString(),
           kind: result.kind,
+          routeUrl: result.routeUrl,
         },
       ]);
     } catch {
@@ -84,6 +87,17 @@ export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: Ch
     listRef.current?.scrollToEnd({ animated: false });
   }, [messages, typing]);
 
+  const openRoute = async (messageId: string, routeUrl: string) => {
+    setRouteErrorFor(null);
+    try {
+      const supported = await Linking.canOpenURL(routeUrl);
+      if (!supported) throw new Error('link não suportado');
+      await Linking.openURL(routeUrl);
+    } catch {
+      setRouteErrorFor(messageId);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -99,7 +113,7 @@ export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: Ch
         <View style={styles.initialContent}>
           <Text style={styles.initialTitle}>Como posso ajudar?</Text>
           <Text style={styles.initialText}>
-            Pergunte pela unidade mais próxima. Os dados vêm do CNES.
+            Pergunte pela unidade mais próxima ou pelo tempo de trajeto.
           </Text>
         </View>
       ) : (
@@ -137,6 +151,35 @@ export function ChatScreen({ theme, coords, uf, messages, onChangeMessages }: Ch
                 >
                   {item.text}
                 </Text>
+                {!isUser && item.routeUrl && (
+                  <Pressable
+                    accessibilityHint="Abre a rota recomendada fora do UPA Agora"
+                    accessibilityLabel="Abrir rota recomendada no Google Maps"
+                    accessibilityRole="link"
+                    onPress={() => openRoute(item.id, item.routeUrl!)}
+                    style={({ pressed }) => [
+                      styles.routeButton,
+                      pressed && styles.pressedSurface,
+                    ]}
+                  >
+                    <Ionicons
+                      name="navigate-outline"
+                      size={17}
+                      color={theme.colors.accent}
+                    />
+                    <Text style={styles.routeButtonText}>Abrir no Google Maps</Text>
+                    <Ionicons
+                      name="open-outline"
+                      size={15}
+                      color={theme.colors.textMuted}
+                    />
+                  </Pressable>
+                )}
+                {routeErrorFor === item.id && (
+                  <Text accessibilityLiveRegion="polite" style={styles.routeError}>
+                    Não foi possível abrir o mapa neste dispositivo.
+                  </Text>
+                )}
               </View>
             );
           }}
@@ -304,6 +347,30 @@ const createStyles = (theme: AppTheme) =>
     },
     userMessageText: { color: theme.colors.text },
     emergencyText: { color: theme.isDark ? theme.colors.text : '#6F2621' },
+    routeButton: {
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      borderColor: theme.colors.border,
+      borderRadius: radii.sm,
+      borderWidth: 1,
+      flexDirection: 'row',
+      gap: 7,
+      marginTop: 10,
+      minHeight: 42,
+      paddingHorizontal: 11,
+    },
+    routeButtonText: {
+      color: theme.colors.text,
+      fontFamily: typography.medium,
+      fontSize: 13,
+    },
+    routeError: {
+      color: theme.colors.danger,
+      fontFamily: typography.regular,
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: 6,
+    },
     typing: {
       alignItems: 'center',
       flexDirection: 'row',

@@ -31,7 +31,7 @@ export type UF = {
 
 export type ChatRole = 'assistant' | 'user';
 
-export type ChatKind = 'nearest' | 'list' | 'emergency' | 'unavailable' | 'help';
+export type ChatKind = 'nearest' | 'list' | 'emergency' | 'unavailable' | 'help' | 'assistant';
 
 export type ChatMessage = {
   id: string;
@@ -39,6 +39,8 @@ export type ChatMessage = {
   text: string;
   createdAt: string;
   kind?: ChatKind;
+  /** Link universal de rota validado pelo backend; nunca contém chave de API. */
+  routeUrl?: string | null;
 };
 
 export type DataSource = 'api' | 'demo';

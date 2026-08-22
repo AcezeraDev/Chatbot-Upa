@@ -4,6 +4,10 @@ dist/
 /android/
 *.log
 .env
+.env.local
+.env.*.local
+*.pem
+*.key
 __pycache__/
 .pytest_cache/
 .venv/

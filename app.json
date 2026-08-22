@@ -18,7 +18,7 @@
       "bundleIdentifier": "com.upaagora.demonstracao",
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "O UPA Agora usa sua localização apenas para ordenar as unidades de pronto atendimento pela distância. Nada é armazenado."
+        "NSLocationWhenInUseUsageDescription": "O UPA Agora usa sua localização para encontrar unidades e calcular rotas quando solicitado. Nada é armazenado."
       }
     },
     "web": {
@@ -30,7 +30,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "O UPA Agora usa sua localização apenas para ordenar as unidades de pronto atendimento pela distância. Nada é armazenado."
+          "locationAlwaysAndWhenInUsePermission": "O UPA Agora usa sua localização para encontrar unidades e calcular rotas quando solicitado. Nada é armazenado."
         }
       ]
     ]

@@ -48,8 +48,9 @@ export function AboutScreen({ theme }: AboutScreenProps) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Limites</Text>
           <Text style={styles.paragraph}>
-            Não exibimos tempo de fila. As distâncias são em linha reta e alguns horários ou
-            endereços precisam de confirmação.
+            Não exibimos tempo de fila. A lista usa distância em linha reta; o assistente só
+            informa trajeto quando consegue consultá-lo. Alguns horários e endereços precisam de
+            confirmação.
           </Text>
         </View>
 
@@ -64,7 +65,9 @@ export function AboutScreen({ theme }: AboutScreenProps) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Privacidade</Text>
           <Text style={styles.paragraph}>
-            Sua localização é usada apenas para calcular distâncias e não é armazenada.
+            Sua localização não é armazenada. Ela é usada para encontrar unidades e, quando você
+            pede tempo de trajeto, é enviada ao OpenRouteService para calcular a rota. O Google
+            Maps só recebe a origem e o destino se você tocar em “Abrir no Google Maps”.
           </Text>
         </View>
       </View>

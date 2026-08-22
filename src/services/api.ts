@@ -81,12 +81,65 @@ export const getUfs = async (): Promise<UF[]> => {
   return Array.isArray(payload) ? (payload as UF[]) : [];
 };
 
+type ChatResponse = {
+  reply: string;
+  kind: ChatKind;
+  routeUrl: string | null;
+};
+
+const CHAT_KINDS = new Set<ChatKind>([
+  'nearest',
+  'list',
+  'emergency',
+  'unavailable',
+  'help',
+  'assistant',
+]);
+
+const isSafeGoogleMapsRoute = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'www.google.com' &&
+      url.pathname === '/maps/dir/' &&
+      url.searchParams.get('api') === '1'
+    );
+  } catch {
+    return false;
+  }
+};
+
+const parseChatResponse = (payload: unknown): ChatResponse => {
+  if (!payload || typeof payload !== 'object') {
+    throw new ApiUnavailableError('Resposta do chat em formato inesperado');
+  }
+
+  const candidate = payload as Partial<ChatResponse>;
+  if (
+    typeof candidate.reply !== 'string' ||
+    !candidate.reply.trim() ||
+    typeof candidate.kind !== 'string' ||
+    !CHAT_KINDS.has(candidate.kind as ChatKind)
+  ) {
+    throw new ApiUnavailableError('Resposta do chat em formato inesperado');
+  }
+
+  return {
+    reply: candidate.reply,
+    kind: candidate.kind as ChatKind,
+    routeUrl: isSafeGoogleMapsRoute(candidate.routeUrl) ? candidate.routeUrl : null,
+  };
+};
+
 export const sendChatMessage = async (
   message: string,
   coords: Coordinates | null,
   uf: string | null,
-): Promise<{ reply: string; kind: ChatKind }> =>
-  requestJson<{ reply: string; kind: ChatKind }>('/api/chat', {
+): Promise<ChatResponse> =>
+  requestJson<unknown>('/api/chat', {
     method: 'POST',
     body: JSON.stringify({
       message,
@@ -94,4 +147,4 @@ export const sendChatMessage = async (
       longitude: coords?.longitude ?? null,
       uf,
     }),
-  });
+  }).then(parseChatResponse);

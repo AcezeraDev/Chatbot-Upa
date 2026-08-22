@@ -15,6 +15,7 @@ O app pode ser executado no navegador, em um celular com Expo Go ou como aplicat
 - Abre o telefone para ligar para a unidade.
 - Permite escolher o estado manualmente quando a localização não está disponível.
 - Oferece um assistente para encontrar unidades por conversa.
+- Quando a integração de mapas está ativa, compara tempo e distância pelas ruas.
 - Detecta mensagens de emergência e orienta ligar para o SAMU no número 192.
 
 ## Limites importantes
@@ -22,7 +23,8 @@ O app pode ser executado no navegador, em um celular com Expo Go ou como aplicat
 O UPA Agora procura ser honesto sobre o que os dados permitem afirmar:
 
 - **Não mostra tempo de fila.** Não existe uma fonte pública nacional de filas em tempo real.
-- **A distância é em linha reta.** Ela pode ser diferente do trajeto por ruas.
+- **A lista principal usa distância em linha reta.** O assistente só informa
+  trajeto por ruas quando recebe um resultado da integração de mapas.
 - **Algumas coordenadas do CNES podem ser imprecisas.** O app mostra um aviso quando identifica esse caso.
 - **Alguns horários são estimados.** Quando não há certeza, o app pede que a pessoa ligue antes de sair.
 - Em caso de risco de vida, a orientação é ligar para o **192 (SAMU)**, e não escolher uma unidade apenas pela distância.
@@ -43,6 +45,8 @@ O UPA Agora procura ser honesto sobre o que os dados permitem afirmar:
 - Pydantic
 - HTTPX
 - SDK oficial da OpenAI e GPT-5.6 Luna opcional
+- OpenRouteService opcional para geocodificação e rotas
+- Google Maps URLs para abrir a navegação sem chave do Google
 
 ### Dados
 
@@ -96,10 +100,10 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `src/types.ts` | Define os contratos TypeScript compartilhados: unidade, UF, coordenadas, mensagens, status de carregamento e precisão dos dados. |
 | `src/theme.ts` | Fonte única de cores, tipografia, espaçamentos e raios. Mantém o visual consistente e oferece temas claro e escuro. |
 | `src/env.d.ts` | Informa ao TypeScript que a variável `EXPO_PUBLIC_API_URL` pode ser lida por `process.env`. |
-| `src/services/api.ts` | Centraliza todas as chamadas ao backend, aplica timeout, monta os parâmetros, reduz a precisão da coordenada enviada e valida respostas de unidades. |
+| `src/services/api.ts` | Centraliza todas as chamadas ao backend, aplica timeout, monta os parâmetros e reduz a precisão da coordenada enviada. Valida as respostas de unidades e a do assistente, e só aceita link de rota que aponte para o Google Maps. |
 | `src/services/location.ts` | Solicita permissão, obtém a posição do aparelho e tenta descobrir cidade e estado com geocoding reverso local. |
 | `src/screens/HomeScreen.tsx` | Tela inicial. Apresenta o produto, estados de localização/erro, aviso do SAMU e a lista de unidades. |
-| `src/screens/ChatScreen.tsx` | Interface do assistente. Guarda o texto sendo digitado, envia mensagens, mostra respostas, sugestões, carregamento e destaque de emergência. |
+| `src/screens/ChatScreen.tsx` | Interface do assistente. Guarda o texto sendo digitado, envia mensagens, mostra respostas, sugestões, carregamento e destaque de emergência. Exibe o botão de rota quando o backend devolve um link. |
 | `src/screens/AboutScreen.tsx` | Tela Sobre. Explica a fonte dos dados, limites, privacidade e decisões responsáveis do aplicativo. |
 | `src/components/UpaCard.tsx` | Cartão de uma unidade. Formata distância e horário, mostra precisão, abre rota no mapa e inicia ligação telefônica. |
 | `src/components/UfPicker.tsx` | Modal inferior com os 27 estados. É usado quando a UF precisa ser escolhida ou trocada manualmente. |
@@ -111,7 +115,7 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 |---|---|
 | `backend/pyproject.toml` | Define o pacote Python, a versão mínima do Python, dependências do backend, dependências de teste e configuração do pytest. |
 | `backend/requirements.txt` | Lista simples das dependências usadas no deploy da Vercel. |
-| `backend/.env.example` | Exemplo das variáveis privadas do backend, como origens CORS, chave OpenAI, modelo e esforço de raciocínio. |
+| `backend/.env.example` | Referência dos nomes de configuração privada usados pelo backend. Não contém credenciais reais. |
 | `backend/.gitignore` | Ignora a pasta local criada pela CLI da Vercel. |
 | `backend/.vercelignore` | Exclui testes, scripts, caches e ambiente virtual do pacote enviado para a Vercel. |
 | `backend/vercel.json` | Encaminha todas as rotas recebidas pela Vercel para a função Python. |
@@ -125,12 +129,13 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `backend/app/main.py` | Cria o FastAPI, configura CORS e cabeçalhos, trata validações e declara todos os endpoints HTTP. |
 | `backend/app/models.py` | Define os modelos Pydantic de unidades, estados, requisições e respostas. É o contrato oficial da API. |
 | `backend/app/cnes.py` | Cliente e adaptador do CNES. Lê seed/cache, busca páginas da API, converte registros, remove unidades inválidas e detecta coordenadas suspeitas. |
+| `backend/app/openrouteservice.py` | Cliente server-side do OpenRouteService. Valida endereços, limita destinos, calcula trajetos e cria links seguros do Google Maps sem usar uma chave do Google. |
 | `backend/app/repository.py` | Implementa as consultas usadas pelo produto: lista por UF, proximidade, limite de 60 km, ordenação, horário atual e filtro de unidades abertas. |
 | `backend/app/geo.py` | Contém o cálculo de Haversine para medir a distância em linha reta entre duas coordenadas. |
 | `backend/app/schedule.py` | Interpreta as descrições de turno do CNES e determina `openNow` no fuso horário de cada estado. |
 | `backend/app/ufs.py` | Mantém os 27 estados, siglas e códigos IBGE; também resolve uma UF recebida por sigla ou nome. |
 | `backend/app/domain.py` | Regras determinísticas do assistente, incluindo detecção de emergência, resposta do SAMU e textos sobre unidades e fila. |
-| `backend/app/assistant.py` | Coordena a OpenAI Responses API com GPT-5.6 Luna e o fallback determinístico. Define a ferramenta de busca, limita rodadas e impede que o modelo invente unidades. |
+| `backend/app/assistant.py` | Coordena a OpenAI Responses API, a busca CNES, a ferramenta opcional de rotas e o fallback determinístico. Limita rodadas e impede que o modelo invente unidades ou trajetos. |
 | `backend/app/ratelimit.py` | Limita requisições por IP e por janela de tempo, com teto menor no endpoint de chat. |
 | `backend/app/static/home.html` | Página HTML apresentada na raiz do backend. Permite demonstrar a API, consultar unidades e testar o assistente sem o app React Native. |
 
@@ -150,7 +155,8 @@ Os JSONs do CNES são dados gerados. Mudanças neles devem ser feitas pelo scrip
 |---|---|
 | `backend/tests/conftest.py` | Cria fixtures compartilhadas, ajusta imports e prepara o cliente de testes. |
 | `backend/tests/test_api.py` | Testa endpoints, validações, distâncias, erros, CORS, cabeçalhos, horário e ausência de tempo de fila inventado. |
-| `backend/tests/test_assistant.py` | Confirma a integração OpenAI sem tocar na rede, as travas do modelo, o uso de unidades reais, os limites da ferramenta e o fallback para regras fixas. |
+| `backend/tests/test_assistant.py` | Confirma a integração OpenAI sem tocar na rede, as travas do modelo, o uso de unidades reais, os limites das ferramentas e o fallback para regras fixas. Também fixa o orçamento de tokens por esforço e a regra do link de rota. |
+| `backend/tests/test_openrouteservice.py` | Testa geocodificação, matriz de rotas, limites de endereço e de destinos, timeout, links do Google Maps e proteção da credencial sem tocar na rede. |
 | `backend/tests/test_cnes_client.py` | Testa paginação, conversão, descarte de registros, seed, falhas externas e detecção de coordenadas imprecisas. |
 | `backend/tests/test_domain.py` | Testa detecção de emergência e evita que mensagens comuns sejam classificadas incorretamente. |
 | `backend/tests/test_ratelimit.py` | Testa limites por cliente, teto específico do chat e controle da memória usada pelo limitador. |
@@ -357,9 +363,14 @@ $env:CORS_ORIGINS = "http://localhost:8081,http://127.0.0.1:8081"
 
 Essa variável vale apenas para o terminal atual.
 
-### Ative o GPT-5.6 Luna (opcional)
+## 4. Ative as integrações privadas (opcional)
 
-O assistente funciona por regras fixas mesmo sem uma chave. Para habilitar as respostas redigidas pelo GPT-5.6 Luna, crie uma chave em [OpenAI API keys](https://platform.openai.com/api-keys) e defina as variáveis no mesmo terminal do backend:
+O assistente responde por regras fixas mesmo sem nenhuma chave, e a lista de
+unidades funciona só com o cadastro do CNES. As duas integrações abaixo são
+opcionais e **ficam apenas no ambiente do backend**.
+
+Para as respostas redigidas pelo GPT-5.6 Luna, crie uma chave em
+[OpenAI API keys](https://platform.openai.com/api-keys):
 
 ```powershell
 $env:OPENAI_API_KEY = "SUA_CHAVE_PRIVADA"
@@ -367,13 +378,30 @@ $env:OPENAI_MODEL = "gpt-5.6-luna"
 $env:OPENAI_REASONING_EFFORT = "low"
 ```
 
-`low` prioriza uma resposta rápida e econômica para o chat. Também são aceitos `none`, `medium`, `high`, `xhigh` e `max`.
+`low` prioriza uma resposta rápida e econômica para o chat. Também são aceitos
+`none`, `medium`, `high`, `xhigh` e `max`. Esforços maiores gastam mais tokens
+por resposta, porque o teto de saída acompanha o esforço configurado.
 
-O arquivo `backend/.env.example` serve como referência dos nomes, mas o projeto não lê um `.env` do backend automaticamente. As variáveis devem estar no terminal ou configuradas no serviço de hospedagem.
+Para o cálculo de trajeto por ruas, crie uma chave gratuita em
+[OpenRouteService](https://openrouteservice.org/dev/#/signup):
 
-Nunca envie a chave ao Git e nunca use `EXPO_PUBLIC_OPENAI_API_KEY`: qualquer variável `EXPO_PUBLIC_` fica exposta no aplicativo.
+```powershell
+$env:OPENROUTESERVICE_API_KEY = "SUA_CHAVE_PRIVADA"
+$env:OPENROUTESERVICE_TIMEOUT = "8"
+```
 
-## 4. Inicie a API
+Sem essa chave, o assistente simplesmente não oferece a ferramenta de rotas ao
+modelo e continua respondendo com a distância em linha reta. O plano gratuito
+tem cota diária; ao estourá-la o app volta sozinho para a linha reta.
+
+O arquivo `backend/.env.example` serve como referência dos nomes, mas o projeto
+não lê um `.env` do backend automaticamente. As variáveis precisam estar no
+terminal ou configuradas no serviço de hospedagem.
+
+Nunca envie essas chaves ao Git e nunca use um prefixo `EXPO_PUBLIC_` com elas:
+qualquer variável `EXPO_PUBLIC_` fica exposta dentro do aplicativo.
+
+## 5. Inicie a API
 
 Ainda dentro de `backend`:
 
@@ -387,7 +415,7 @@ Verifique no navegador:
 - Documentação da API: `http://127.0.0.1:8000/docs`
 - Saúde do serviço: `http://127.0.0.1:8000/health`
 
-## 5. Aponte o aplicativo para o backend local
+## 6. Aponte o aplicativo para o backend local
 
 Volte à raiz do projeto e altere o `.env`:
 
@@ -426,13 +454,8 @@ python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e ".[dev]"
 CORS_ORIGINS="http://localhost:8081,http://127.0.0.1:8081" \
-OPENAI_API_KEY="SUA_CHAVE_PRIVADA" \
-OPENAI_MODEL="gpt-5.6-luna" \
-OPENAI_REASONING_EFFORT="low" \
   .venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-
-As três linhas `OPENAI_` são opcionais. Remova-as para usar somente o modo determinístico.
 
 ---
 
@@ -502,7 +525,7 @@ Na raiz do projeto, confira o arquivo `eas.json`. O perfil já preparado para in
 }
 ```
 
-Se o endereço do backend mudar, atualize `EXPO_PUBLIC_API_URL` nesse arquivo antes de gerar o APK. Essa URL é pública; nunca coloque `OPENAI_API_KEY` ou outra chave secreta no `eas.json`.
+Se o endereço do backend mudar, atualize `EXPO_PUBLIC_API_URL` nesse arquivo antes de gerar o APK. Essa URL é pública; nunca coloque credenciais privadas no `eas.json`.
 
 ## 2. Entre na conta Expo
 
@@ -640,24 +663,24 @@ O cadastro embarcado permite que a API serverless responda rapidamente sem baixa
 
 ## Assistente
 
-O assistente funciona sem chave de IA usando regras determinísticas.
-
-Se `OPENAI_API_KEY` estiver configurada no ambiente do backend, o GPT-5.6 Luna pode redigir as respostas pela OpenAI Responses API. Mesmo nesse modo:
+O assistente sempre possui um modo determinístico, independente de serviços
+externos. Quando as integrações privadas estão habilitadas no ambiente do
+backend, o GPT-5.6 Luna pode redigir respostas e solicitar cálculos de rota.
+Mesmo nesse modo:
 
 - A triagem de emergência acontece antes do modelo.
 - O modelo não escolhe coordenadas.
-- Nomes e endereços só podem vir da ferramenta que consulta o CNES.
+- Nomes de unidades só podem vir da ferramenta que consulta o CNES.
+- O OpenRouteService recebe apenas a origem e até cinco destinos selecionados pelo backend.
+- O modelo recebe o resultado da rota, nunca credenciais privadas.
+- O botão “Abrir no Google Maps” usa uma URL universal, sem chave do Google.
+- O botão só aparece quando a resposta cita **uma** unidade. Com duas citadas,
+  ou nenhuma, não há como saber qual foi a recomendação, e um botão apontando
+  para o endereço errado é pior do que botão nenhum.
+- O Google só recebe origem e destino quando a pessoa decide abrir esse botão.
+- Falhas do OpenRouteService mantêm disponível a distância em linha reta do CNES.
 - Falhas do modelo voltam para a resposta determinística.
 - As requisições usam `store=False`, portanto o backend não pede à API que armazene as respostas.
-
-Configuração padrão:
-
-```env
-OPENAI_MODEL=gpt-5.6-luna
-OPENAI_REASONING_EFFORT=low
-```
-
-Não coloque `OPENAI_API_KEY` no `.env` do aplicativo nem em uma variável `EXPO_PUBLIC_`. Em produção, cadastre a chave como variável secreta do backend na plataforma de hospedagem.
 
 ---
 
@@ -695,6 +718,18 @@ Isso pode acontecer na versão web. Escolha o estado manualmente pelo botão no 
 - Inicie o Uvicorn com `--host 0.0.0.0`.
 - Verifique o Firewall do Windows.
 
+## O botão “Abrir no Google Maps” não aparece no chat
+
+São três causas possíveis, nesta ordem:
+
+1. `OPENROUTESERVICE_API_KEY` não está no ambiente do backend. Sem ela o
+   assistente nem oferece a ferramenta de rotas ao modelo — as respostas
+   continuam corretas, só que com distância em linha reta.
+2. A resposta citou duas unidades, ou nenhuma. O botão só aparece quando há
+   uma única unidade nomeada; com duas, não há como saber qual seria o destino.
+3. A cota diária gratuita do OpenRouteService acabou. O app volta sozinho para
+   a linha reta e o botão reaparece no dia seguinte.
+
 ## O app continua usando o endereço antigo da API
 
 O Expo guarda variáveis públicas no bundle. Pare o servidor e execute:
@@ -723,3 +758,5 @@ npm run web -- --clear
 - [Navegador integrado do VS Code](https://code.visualstudio.com/docs/debugtest/integrated-browser)
 - [Guia oficial do GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6)
 - [Function calling na OpenAI Responses API](https://developers.openai.com/api/docs/guides/function-calling)
+- [OpenRouteService API](https://openrouteservice.org/dev/)
+- [Google Maps URLs sem chave](https://developers.google.com/maps/documentation/urls/get-started?hl=pt-BR)

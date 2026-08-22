@@ -60,6 +60,12 @@ class ChatResponse(BaseModel):
     # "assistant" identifica resposta redigida pelo modelo de linguagem; os
     # demais vêm de regra fixa. O app usa isso para destacar avisos.
     kind: Literal["nearest", "list", "emergency", "unavailable", "help", "assistant"] = "help"
+    # Link universal gerado pelo backend para a primeira rota recomendada.
+    # Não contém chave de API e só aponta para o domínio oficial do Google.
+    routeUrl: str | None = Field(
+        default=None,
+        pattern=r"^https://www\.google\.com/maps/dir/\?api=1&",
+    )
 
 
 class HealthResponse(BaseModel):
