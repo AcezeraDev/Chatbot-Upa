@@ -522,3 +522,177 @@ def test_routes_tool_looks_beyond_the_matrix_cap_for_precise_units(monkeypatch):
 
     assert pedidos["limit"] == assistant.MAX_UNIT_LIMIT
     assert [unit["nome"] for unit in payload["unidades"]] == ["Upa Confiável"]
+
+
+def _stub_cep(monkeypatch, **overrides):
+    from app import brasilapi
+    from app.ufs import resolve_uf
+
+    campos = {
+        "cep": "01310100",
+        "state": resolve_uf("SP"),
+        "city": "São Paulo",
+        "neighborhood": "Bela Vista",
+        "street": "Avenida Paulista",
+        "latitude": -23.55,
+        "longitude": -46.63,
+    }
+    campos.update(overrides)
+    consultas = []
+
+    def fake_lookup(cep):
+        consultas.append(cep)
+        return brasilapi.CepLocation(**campos)
+
+    monkeypatch.setattr(brasilapi, "lookup_cep", fake_lookup)
+    return consultas
+
+
+def test_cep_restores_proximity_search_without_gps(monkeypatch, seeded):
+    """Sem coordenada, antes só sobrava listar o estado fora de ordem."""
+    _stub_cep(monkeypatch)
+
+    payload = json.loads(
+        assistant._run_tool({}, None, None, "SP", "meu cep é 01310-100")
+    )
+
+    assert payload["origemAproximadaPeloCep"] is True
+    assert "01310100" in payload["origem"]
+    # Com origem, a lista volta a ter distância medida.
+    assert payload["unidades"][0]["distanciaKm"] is not None
+    assert payload["unidades"][0]["nome"] == "Upa Perto"
+
+
+def test_cep_supplies_the_uf_when_the_app_did_not(monkeypatch, seeded):
+    """Quem não tem GPS costuma não ter UF; o CEP entrega as duas coisas."""
+    _stub_cep(monkeypatch)
+
+    payload = json.loads(
+        assistant._run_tool({}, None, None, None, "cep 01310100, qual a mais perto?")
+    )
+
+    assert payload["estado"] == "SP"
+    assert "erro" not in payload
+
+
+def test_a_cep_invented_by_the_model_is_ignored(monkeypatch, seeded):
+    """Vale a mesma regra da coordenada: o dado vem da pessoa, não do modelo.
+
+    Um CEP plausível e inventado resolveria para uma cidade real e mandaria
+    alguém para o lugar errado — pior do que não responder.
+    """
+    consultas = _stub_cep(monkeypatch)
+
+    payload = json.loads(
+        assistant._run_tool(
+            {"cep": "20040-020", "endereco": "Avenida Rio Branco"},
+            None,
+            None,
+            "SP",
+            "qual upa é a mais perto?",
+        )
+    )
+
+    assert consultas == []
+    assert "origem" not in payload
+
+
+def test_gps_wins_over_a_cep_in_the_text(monkeypatch, seeded):
+    """Com coordenada do aparelho não há por que consultar CEP nenhum."""
+    consultas = _stub_cep(monkeypatch)
+
+    payload = json.loads(
+        assistant._run_tool({}, -23.55, -46.63, "SP", "moro no cep 20040-020")
+    )
+
+    assert consultas == []
+    assert "origem" not in payload
+
+
+def test_a_failing_cep_service_does_not_break_the_answer(monkeypatch, seeded):
+    """Queda da BrasilAPI devolve o comportamento anterior, não um erro."""
+    from app import brasilapi
+
+    def explode(cep):
+        raise brasilapi.BrasilApiError("fora do ar")
+
+    monkeypatch.setattr(brasilapi, "lookup_cep", explode)
+
+    payload = json.loads(
+        assistant._run_tool({}, None, None, "SP", "meu cep é 01310-100")
+    )
+
+    assert "erro" not in payload
+    assert payload["unidades"]
+    assert "origem" not in payload
+
+
+def test_deterministic_path_also_uses_the_cep(monkeypatch, seeded):
+    """Sem nenhuma chave configurada este é o app inteiro."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    _stub_cep(monkeypatch)
+
+    reply, kind, route_url = assistant.reply_to(
+        "meu cep é 01310-100, qual a upa mais perto?", None, None, "SP"
+    )
+
+    assert kind != "assistant"
+    assert route_url is None
+    assert "Upa Perto" in reply
+
+
+def test_routes_tool_prefers_the_cep_over_the_ors_geocoder(monkeypatch, seeded):
+    """O CEP resolve melhor e não gasta a cota diária do OpenRouteService."""
+    monkeypatch.setenv("OPENROUTESERVICE_API_KEY", "chave-ors-de-teste")
+    _stub_cep(monkeypatch)
+
+    def nunca(*args, **kwargs):
+        raise AssertionError("o geocodificador do ORS não deveria ser chamado")
+
+    monkeypatch.setattr(assistant.openrouteservice, "geocode_address", nunca)
+    monkeypatch.setattr(
+        assistant.openrouteservice,
+        "compute_route_matrix",
+        lambda latitude, longitude, units, mode: [
+            assistant.openrouteservice.RouteEstimate(0, 2.0, 6)
+        ],
+    )
+
+    payload = json.loads(
+        assistant._run_routes_tool(
+            {"limite": 1}, None, None, "SP", "cep 01310-100, quanto tempo de carro?"
+        )
+    )
+
+    assert payload["origemAproximadaPeloCep"] is True
+    assert "01310100" in payload["origem"]
+    assert payload["unidades"][0]["tempoEstimadoMinutos"] == 6
+
+
+def test_routes_tool_sends_a_clean_address_when_the_cep_has_no_point(monkeypatch, seeded):
+    """Sem coordenada, o CEP ainda melhora o que o ORS recebe."""
+    monkeypatch.setenv("OPENROUTESERVICE_API_KEY", "chave-ors-de-teste")
+    _stub_cep(monkeypatch, latitude=None, longitude=None)
+    enviados = []
+
+    def fake_geocode(address, uf):
+        enviados.append((address, uf))
+        return assistant.openrouteservice.GeocodedLocation(-23.55, -46.63, address)
+
+    monkeypatch.setattr(assistant.openrouteservice, "geocode_address", fake_geocode)
+    monkeypatch.setattr(
+        assistant.openrouteservice,
+        "compute_route_matrix",
+        lambda latitude, longitude, units, mode: [
+            assistant.openrouteservice.RouteEstimate(0, 2.0, 6)
+        ],
+    )
+
+    json.loads(
+        assistant._run_routes_tool(
+            {"limite": 1}, None, None, "SP", "cep 01310-100, quanto tempo?"
+        )
+    )
+
+    # O texto cru da pessoa não chega ao ORS; o endereço normalizado, sim.
+    assert enviados == [("Avenida Paulista, Bela Vista, São Paulo", "SP")]

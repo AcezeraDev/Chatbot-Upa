@@ -241,3 +241,98 @@ def test_validation_error_does_not_echo_the_input() -> None:
     response = client.post("/api/chat", json={"message": marker * 30})  # > 500 chars
     assert response.status_code == 422
     assert marker not in response.text
+
+
+def _stub_cep(monkeypatch, **overrides):
+    """Substitui a consulta externa de CEP por um resultado conhecido."""
+    from app import brasilapi
+    from app.ufs import resolve_uf
+
+    campos = {
+        "cep": "01310100",
+        "state": resolve_uf("SP"),
+        "city": "São Paulo",
+        "neighborhood": "Bela Vista",
+        "street": "Avenida Paulista",
+        "latitude": -23.5475,
+        "longitude": -46.63611,
+    }
+    campos.update(overrides)
+    monkeypatch.setattr(
+        brasilapi, "lookup_cep", lambda cep: brasilapi.CepLocation(**campos)
+    )
+
+
+def test_cep_endpoint_returns_an_origin(monkeypatch) -> None:
+    """É o caminho de quem negou a localização: CEP vira ponto de partida."""
+    _stub_cep(monkeypatch)
+
+    response = client.get("/api/cep/01310-100")
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["cep"] == "01310100"
+    assert body["uf"] == "SP"
+    assert body["ufCode"] == 35
+    assert body["city"] == "São Paulo"
+    assert body["latitude"] == pytest.approx(-23.5475)
+    assert body["precision"] == "rua"
+
+
+def test_cep_without_street_reports_municipal_precision(monkeypatch) -> None:
+    """CEP geral aponta o centro do município, e o app precisa saber disso."""
+    _stub_cep(monkeypatch, street=None, neighborhood=None, city="Capixaba")
+
+    body = client.get("/api/cep/69931000").json()
+
+    assert body["precision"] == "municipio"
+    assert body["street"] is None
+
+
+def test_cep_without_coordinates_still_answers(monkeypatch) -> None:
+    """Sem coordenada o app perde a ordenação, não a UF."""
+    _stub_cep(monkeypatch, latitude=None, longitude=None)
+
+    body = client.get("/api/cep/01310100").json()
+
+    assert body["latitude"] is None
+    assert body["uf"] == "SP"
+    assert body["precision"] == "desconhecida"
+
+
+def test_unknown_cep_returns_404(monkeypatch) -> None:
+    from app import brasilapi
+
+    def explode(cep):
+        raise brasilapi.CepNotFoundError("CEP não encontrado.")
+
+    monkeypatch.setattr(brasilapi, "lookup_cep", explode)
+
+    assert client.get("/api/cep/00000000").status_code == 404
+
+
+def test_cep_service_failure_returns_503(monkeypatch) -> None:
+    from app import brasilapi
+
+    def explode(cep):
+        raise brasilapi.BrasilApiError("Não foi possível consultar o CEP agora.")
+
+    monkeypatch.setattr(brasilapi, "lookup_cep", explode)
+
+    assert client.get("/api/cep/01310100").status_code == 503
+
+
+def test_cep_origin_feeds_the_nearby_ordering(monkeypatch) -> None:
+    """O ganho real: com a coordenada do CEP, /nearby volta a ordenar."""
+    _stub_cep(monkeypatch)
+    origem = client.get("/api/cep/01310100").json()
+
+    nomes = [
+        unit["name"]
+        for unit in client.get(
+            "/api/upas/nearby",
+            params={"lat": origem["latitude"], "lon": origem["longitude"], "uf": "SP"},
+        ).json()
+    ]
+
+    assert nomes == ["Upa Media", "Upa Perto", "Upa Longe"]

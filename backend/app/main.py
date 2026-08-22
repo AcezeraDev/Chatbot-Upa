@@ -8,10 +8,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import brasilapi
 from .cnes import CnesUnavailableError, seed_metadata
 from .assistant import reply_to
 from .ratelimit import limit_chat, limit_read
-from .models import ChatRequest, ChatResponse, HealthResponse, Upa, UF
+from .models import CepLocation, ChatRequest, ChatResponse, HealthResponse, Upa, UF
 from .repository import DEFAULT_RESULT_LIMIT, find_nearby, list_upas
 from .ufs import UFS, resolve_uf
 
@@ -178,6 +179,47 @@ def get_nearby(
     """Unidades mais próximas do ponto informado, da mais perto para a mais longe."""
     return _guard_cnes(
         find_nearby, lat, lon, _uf_code_or_400(uf), limit, only_open=abertas
+    )
+
+
+@app.get(
+    "/api/cep/{cep}",
+    response_model=CepLocation,
+    tags=["locations"],
+    dependencies=[Depends(limit_read)],
+)
+def get_cep(cep: str) -> CepLocation:
+    """Resolve um CEP em cidade, estado e coordenada aproximada.
+
+    É o caminho de quem negou a localização. Sem isto, a única saída era
+    escolher o estado e receber a lista inteira fora de ordem; com a
+    coordenada do CEP, `/api/upas/nearby` volta a funcionar para essa pessoa.
+
+    O endpoint devolve só a origem: quem ordena as unidades continua sendo
+    `/api/upas/nearby`, que o aplicativo já chama.
+    """
+    try:
+        found = brasilapi.lookup_cep(cep)
+    except brasilapi.CepNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except brasilapi.BrasilApiError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+    if found.has_coordinates:
+        precision = "rua" if found.street else "municipio"
+    else:
+        precision = "desconhecida"
+
+    return CepLocation(
+        cep=found.cep,
+        uf=found.state.sigla,
+        ufCode=found.state.code,
+        city=found.city,
+        neighborhood=found.neighborhood,
+        street=found.street,
+        latitude=found.latitude,
+        longitude=found.longitude,
+        precision=precision,
     )
 
 

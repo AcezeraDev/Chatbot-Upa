@@ -1,6 +1,6 @@
 import pytest
 
-from app import cnes, ratelimit
+from app import brasilapi, cnes, ratelimit
 
 
 @pytest.fixture(autouse=True)
@@ -16,6 +16,10 @@ def isolated_cache(tmp_path, monkeypatch):
     # A contagem do limitador tambem e estado global: sem zerar, as
     # requisicoes de um teste consomem o teto do seguinte.
     ratelimit.reset()
+    # O cache de CEP tambem e global: sem zerar, um teste enxerga o resultado
+    # que outro guardou e a chamada mockada nunca acontece.
+    brasilapi.clear_cache()
     yield
     cnes.clear_cache()
     ratelimit.reset()
+    brasilapi.clear_cache()

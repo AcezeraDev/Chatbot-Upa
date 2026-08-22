@@ -29,6 +29,23 @@ export type UF = {
   name: string;
 };
 
+/** Precisão do ponto que o CEP devolve. Nunca é o número da casa. */
+export type CepPrecision = 'rua' | 'municipio' | 'desconhecida';
+
+/** Origem aproximada resolvida por CEP, para quem está sem localização. */
+export type CepLocation = {
+  cep: string;
+  uf: string;
+  ufCode: number;
+  city: string;
+  neighborhood?: string | null;
+  street?: string | null;
+  /** Nem todo CEP tem ponto na base; sem ele resta a UF e a cidade. */
+  latitude?: number | null;
+  longitude?: number | null;
+  precision: CepPrecision;
+};
+
 export type ChatRole = 'assistant' | 'user';
 
 export type ChatKind = 'nearest' | 'list' | 'emergency' | 'unavailable' | 'help' | 'assistant';
@@ -58,6 +75,7 @@ export type LoadStatus =
   | { state: 'ready' }
   | { state: 'permission-denied' }
   | { state: 'uf-unknown' }
+  | { state: 'cep-not-found' }
   | { state: 'location-unavailable' }
   | { state: 'offline' }
   | { state: 'error'; message: string };

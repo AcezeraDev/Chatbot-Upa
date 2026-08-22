@@ -48,6 +48,26 @@ class UF(BaseModel):
     name: str
 
 
+class CepLocation(BaseModel):
+    """Origem resolvida a partir de um CEP, para quem está sem GPS."""
+
+    cep: str = Field(pattern=r"^\d{8}$")
+    uf: str
+    ufCode: int
+    city: str
+    neighborhood: str | None = None
+    street: str | None = None
+
+    # Nem todo CEP tem coordenada na base: quando falta, o aplicativo ainda
+    # ganha a UF e a cidade, e só perde a ordenação por proximidade.
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+
+    # A precisão é do trecho da rua — ou do centro do município, num CEP
+    # geral. Serve para ordenar unidades, não para dizer "a 400 metros".
+    precision: Literal["rua", "municipio", "desconhecida"] = "desconhecida"
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=500)
     latitude: float | None = Field(default=None, ge=-90, le=90)

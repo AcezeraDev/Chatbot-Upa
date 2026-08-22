@@ -14,6 +14,7 @@ O app pode ser executado no navegador, em um celular com Expo Go ou como aplicat
 - Abre a rota no aplicativo de mapas.
 - Abre o telefone para ligar para a unidade.
 - Permite escolher o estado manualmente quando a localização não está disponível.
+- Aceita um CEP no lugar do GPS e continua ordenando as unidades por proximidade.
 - Oferece um assistente para encontrar unidades por conversa.
 - Quando a integração de mapas está ativa, compara tempo e distância pelas ruas.
 - Detecta mensagens de emergência e orienta ligar para o SAMU no número 192.
@@ -25,6 +26,9 @@ O UPA Agora procura ser honesto sobre o que os dados permitem afirmar:
 - **Não mostra tempo de fila.** Não existe uma fonte pública nacional de filas em tempo real.
 - **A lista principal usa distância em linha reta.** O assistente só informa
   trajeto por ruas quando recebe um resultado da integração de mapas.
+- **Origem por CEP é aproximada.** O ponto é do trecho da rua, ou do centro do
+  município num CEP geral. Serve para ordenar unidades, não para afirmar
+  distância exata.
 - **Algumas coordenadas do CNES podem ser imprecisas.** O app mostra um aviso quando identifica esse caso.
 - **Alguns horários são estimados.** Quando não há certeza, o app pede que a pessoa ligue antes de sair.
 - Em caso de risco de vida, a orientação é ligar para o **192 (SAMU)**, e não escolher uma unidade apenas pela distância.
@@ -46,6 +50,7 @@ O UPA Agora procura ser honesto sobre o que os dados permitem afirmar:
 - HTTPX
 - SDK oficial da OpenAI e GPT-5.6 Luna opcional
 - OpenRouteService opcional para geocodificação e rotas
+- BrasilAPI para resolver CEP, sem chave e sem cadastro
 - Google Maps URLs para abrir a navegação sem chave do Google
 
 ### Dados
@@ -102,10 +107,11 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `src/env.d.ts` | Informa ao TypeScript que a variável `EXPO_PUBLIC_API_URL` pode ser lida por `process.env`. |
 | `src/services/api.ts` | Centraliza todas as chamadas ao backend, aplica timeout, monta os parâmetros e reduz a precisão da coordenada enviada. Valida as respostas de unidades e a do assistente, e só aceita link de rota que aponte para o Google Maps. |
 | `src/services/location.ts` | Solicita permissão, obtém a posição do aparelho e tenta descobrir cidade e estado com geocoding reverso local. |
-| `src/screens/HomeScreen.tsx` | Tela inicial. Apresenta o produto, estados de localização/erro, aviso do SAMU e a lista de unidades. |
+| `src/screens/HomeScreen.tsx` | Tela inicial. Apresenta o produto, estados de localização/erro, aviso do SAMU, o campo de CEP quando a localização falha e a lista de unidades. |
 | `src/screens/ChatScreen.tsx` | Interface do assistente. Guarda o texto sendo digitado, envia mensagens, mostra respostas, sugestões, carregamento e destaque de emergência. Exibe o botão de rota quando o backend devolve um link. |
 | `src/screens/AboutScreen.tsx` | Tela Sobre. Explica a fonte dos dados, limites, privacidade e decisões responsáveis do aplicativo. |
 | `src/components/UpaCard.tsx` | Cartão de uma unidade. Formata distância e horário, mostra precisão, abre rota no mapa e inicia ligação telefônica. |
+| `src/components/CepPrompt.tsx` | Campo de CEP oferecido quando a localização falha. Formata enquanto se digita e mostra o erro do próprio CEP separado do erro de rede. |
 | `src/components/UfPicker.tsx` | Modal inferior com os 27 estados. É usado quando a UF precisa ser escolhida ou trocada manualmente. |
 | `src/components/BottomNav.tsx` | Navegação inferior entre Início, Chat e Sobre, com papéis e rótulos de acessibilidade. |
 
@@ -129,6 +135,7 @@ Esta seção serve como guia para quem precisa descobrir **onde fazer uma altera
 | `backend/app/main.py` | Cria o FastAPI, configura CORS e cabeçalhos, trata validações e declara todos os endpoints HTTP. |
 | `backend/app/models.py` | Define os modelos Pydantic de unidades, estados, requisições e respostas. É o contrato oficial da API. |
 | `backend/app/cnes.py` | Cliente e adaptador do CNES. Lê seed/cache, busca páginas da API, converte registros, remove unidades inválidas e detecta coordenadas suspeitas. |
+| `backend/app/brasilapi.py` | Resolve CEP em cidade, estado e coordenada aproximada. Cache em memória, timeout próprio e erros que não vazam detalhe interno. Não usa chave. |
 | `backend/app/openrouteservice.py` | Cliente server-side do OpenRouteService. Valida endereços, limita destinos, calcula trajetos e cria links seguros do Google Maps sem usar uma chave do Google. |
 | `backend/app/repository.py` | Implementa as consultas usadas pelo produto: lista por UF, proximidade, limite de 60 km, ordenação, horário atual e filtro de unidades abertas. |
 | `backend/app/geo.py` | Contém o cálculo de Haversine para medir a distância em linha reta entre duas coordenadas. |
@@ -156,6 +163,7 @@ Os JSONs do CNES são dados gerados. Mudanças neles devem ser feitas pelo scrip
 | `backend/tests/conftest.py` | Cria fixtures compartilhadas, ajusta imports e prepara o cliente de testes. |
 | `backend/tests/test_api.py` | Testa endpoints, validações, distâncias, erros, CORS, cabeçalhos, horário e ausência de tempo de fila inventado. |
 | `backend/tests/test_assistant.py` | Confirma a integração OpenAI sem tocar na rede, as travas do modelo, o uso de unidades reais, os limites das ferramentas e o fallback para regras fixas. Também fixa o orçamento de tokens por esforço e a regra do link de rota. |
+| `backend/tests/test_brasilapi.py` | Testa coordenada em texto, CEP sem ponto na base, 404 sem vazar provedor, cache e extração de CEP em texto livre, sem tocar na rede. |
 | `backend/tests/test_openrouteservice.py` | Testa geocodificação, matriz de rotas, limites de endereço e de destinos, timeout, links do Google Maps e proteção da credencial sem tocar na rede. |
 | `backend/tests/test_cnes_client.py` | Testa paginação, conversão, descarte de registros, seed, falhas externas e detecção de coordenadas imprecisas. |
 | `backend/tests/test_domain.py` | Testa detecção de emergência e evita que mensagens comuns sejam classificadas incorretamente. |
@@ -400,6 +408,14 @@ terminal ou configuradas no serviço de hospedagem.
 
 Nunca envie essas chaves ao Git e nunca use um prefixo `EXPO_PUBLIC_` com elas:
 qualquer variável `EXPO_PUBLIC_` fica exposta dentro do aplicativo.
+
+**A resolução de CEP não entra nessa lista.** A BrasilAPI não pede chave nem
+cadastro, então `/api/cep/{cep}` funciona sem nenhuma configuração. A única
+variável opcional é o timeout:
+
+```powershell
+$env:BRASILAPI_TIMEOUT = "6"
+```
 
 ## 5. Inicie a API
 
@@ -648,6 +664,7 @@ Antes de abrir um pull request ou entregar mudanças para outro colega, execute 
 | `GET` | `/api/ufs` | Lista os estados disponíveis |
 | `GET` | `/api/upas?uf=SP` | Lista unidades de um estado |
 | `GET` | `/api/upas/nearby?lat=&lon=&uf=SP` | Lista unidades por proximidade |
+| `GET` | `/api/cep/01310100` | Resolve um CEP em origem aproximada |
 | `POST` | `/api/chat` | Responde mensagens do assistente |
 
 ## Como os dados são carregados
@@ -670,6 +687,9 @@ Mesmo nesse modo:
 
 - A triagem de emergência acontece antes do modelo.
 - O modelo não escolhe coordenadas.
+- O modelo também não escolhe o CEP. Ele pode pedir o CEP em texto, mas quem
+  extrai e resolve é o backend, a partir da mensagem original. Um CEP inventado
+  resolveria para uma cidade real e mandaria alguém ao lugar errado.
 - Nomes de unidades só podem vir da ferramenta que consulta o CNES.
 - O OpenRouteService recebe apenas a origem e até cinco destinos selecionados pelo backend.
 - O modelo recebe o resultado da rota, nunca credenciais privadas.
@@ -679,6 +699,7 @@ Mesmo nesse modo:
   para o endereço errado é pior do que botão nenhum.
 - O Google só recebe origem e destino quando a pessoa decide abrir esse botão.
 - Falhas do OpenRouteService mantêm disponível a distância em linha reta do CNES.
+- Falhas da BrasilAPI devolvem o comportamento anterior, sem erro para a pessoa.
 - Falhas do modelo voltam para a resposta determinística.
 - As requisições usam `store=False`, portanto o backend não pede à API que armazene as respostas.
 
@@ -717,6 +738,12 @@ Isso pode acontecer na versão web. Escolha o estado manualmente pelo botão no 
 - Use o IP do computador na rede local.
 - Inicie o Uvicorn com `--host 0.0.0.0`.
 - Verifique o Firewall do Windows.
+
+## Digitei o CEP e a lista veio sem distância
+
+O CEP foi reconhecido, mas não tem coordenada na base — acontece com parte
+deles. O app ainda descobre a UF e a cidade, então a lista aparece; só não há
+de onde medir. Escolher outro CEP próximo, ou ativar a localização, resolve.
 
 ## O botão “Abrir no Google Maps” não aparece no chat
 

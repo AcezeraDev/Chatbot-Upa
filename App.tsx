@@ -8,7 +8,14 @@ import { UfPicker } from './src/components/UfPicker';
 import { AboutScreen } from './src/screens/AboutScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
-import { ApiUnavailableError, getNearbyUpas, getUfs, getUpasByUf } from './src/services/api';
+import {
+  ApiUnavailableError,
+  CepNotFoundError,
+  getNearbyUpas,
+  getUfs,
+  getUpasByUf,
+  lookupCep,
+} from './src/services/api';
 import { getCurrentLocation } from './src/services/location';
 import { getTheme } from './src/theme';
 import type { ChatMessage, Coordinates, LoadStatus, UF, Upa } from './src/types';
@@ -33,6 +40,8 @@ function AppContent() {
   const [ufs, setUfs] = useState<UF[]>([]);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [cepBusy, setCepBusy] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
 
   // O histórico do chat vive aqui para não ser perdido ao trocar de aba.
   const [messages, setMessages] = useState<ChatMessage[]>(() => [welcomeMessage()]);
@@ -130,6 +139,52 @@ function AppContent() {
     setRefreshing(false);
   }, [coords, loadUnits, locateAndLoad, uf]);
 
+  /**
+   * Caminho de quem está sem localização.
+   *
+   * O CEP resolve as duas coisas que faltavam de uma vez: a UF, que evita o
+   * seletor manual, e um ponto bom o bastante para ordenar por proximidade.
+   * Quando o CEP não tem coordenada na base, ainda sobra a UF — a lista vem
+   * sem distância, que é exatamente o comportamento anterior.
+   */
+  const handleSubmitCep = useCallback(
+    async (cep: string) => {
+      setCepBusy(true);
+      setCepError(null);
+      try {
+        const found = await lookupCep(cep);
+        const matched =
+          ufs.find((item) => item.sigla.toLowerCase() === found.uf.toLowerCase()) ?? null;
+
+        if (!matched) {
+          setCepError('Não reconhecemos o estado desse CEP.');
+          return;
+        }
+
+        const position =
+          typeof found.latitude === 'number' && typeof found.longitude === 'number'
+            ? { latitude: found.latitude, longitude: found.longitude }
+            : null;
+
+        setCoords(position);
+        setCity(found.city);
+        setUf(matched);
+        await loadUnits(matched, position);
+      } catch (error) {
+        if (error instanceof CepNotFoundError) {
+          setCepError(error.message);
+        } else if (error instanceof ApiUnavailableError) {
+          setCepError('Não foi possível consultar o CEP agora.');
+        } else {
+          setCepError('Não foi possível usar esse CEP.');
+        }
+      } finally {
+        setCepBusy(false);
+      }
+    },
+    [loadUnits, ufs],
+  );
+
   const handleSelectUf = useCallback(
     (selected: UF) => {
       setPickerVisible(false);
@@ -148,10 +203,13 @@ function AppContent() {
       <SafeAreaView edges={['top']} style={styles.screenArea}>
         <View style={[styles.screenArea, activeTab !== 'home' && styles.hidden]}>
           <HomeScreen
+            cepBusy={cepBusy}
+            cepError={cepError}
             city={city}
             onChangeUf={() => setPickerVisible(true)}
             onRefresh={handleRefresh}
             onRetry={locateAndLoad}
+            onSubmitCep={handleSubmitCep}
             refreshing={refreshing}
             status={status}
             theme={theme}

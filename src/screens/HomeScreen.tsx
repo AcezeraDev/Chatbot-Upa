@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 
+import { CepPrompt } from '../components/CepPrompt';
 import { UpaCard } from '../components/UpaCard';
 import type { AppTheme } from '../theme';
 import { radii, spacing, typography } from '../theme';
@@ -25,6 +26,9 @@ type HomeScreenProps = {
   onRefresh: () => void;
   onRetry: () => void;
   onChangeUf: () => void;
+  onSubmitCep: (cep: string) => void;
+  cepBusy: boolean;
+  cepError: string | null;
 };
 
 type EmptyState = {
@@ -45,6 +49,10 @@ const emptyStates: Record<string, EmptyState> = {
     title: 'Escolha seu estado',
     body: 'Encontramos sua posição, mas ainda precisamos saber a UF.',
   },
+  'cep-not-found': {
+    title: 'CEP não encontrado',
+    body: 'Confira os oito dígitos ou escolha um estado para continuar.',
+  },
   offline: {
     title: 'Servidor indisponível',
     body: 'Não foi possível consultar o CNES agora.',
@@ -61,10 +69,20 @@ export function HomeScreen({
   onRefresh,
   onRetry,
   onChangeUf,
+  onSubmitCep,
+  cepBusy,
+  cepError,
 }: HomeScreenProps) {
   const styles = createStyles(theme);
   const busy = status.state === 'locating' || status.state === 'loading';
   const empty = emptyStates[status.state];
+  // O CEP substitui a localização; não tem o que resolver quando o problema
+  // é o servidor fora do ar.
+  const offersCep =
+    status.state === 'permission-denied' ||
+    status.state === 'location-unavailable' ||
+    status.state === 'uf-unknown' ||
+    status.state === 'cep-not-found';
   const visibleUpas = busy ? [] : upas;
   const hasDistances = visibleUpas.some(
     (upa) => upa.distanceKm !== null && upa.distanceKm !== undefined,
@@ -148,6 +166,15 @@ export function HomeScreen({
                   <Text style={styles.secondaryButtonText}>Escolher estado</Text>
                 </Pressable>
               </View>
+
+              {offersCep && (
+                <CepPrompt
+                  busy={cepBusy}
+                  error={cepError}
+                  onSubmit={onSubmitCep}
+                  theme={theme}
+                />
+              )}
             </View>
           )}
 

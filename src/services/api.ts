@@ -1,9 +1,20 @@
-import type { ChatKind, Coordinates, UF, Upa } from '../types';
+import type { CepLocation, ChatKind, Coordinates, UF, Upa } from '../types';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
 const REQUEST_TIMEOUT_MS = 15000;
 
-export class ApiUnavailableError extends Error {}
+export class ApiUnavailableError extends Error {
+  /** Status HTTP, quando houve resposta. Distingue erro do usuário de queda. */
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/** O CEP existe no formato, mas nenhum provedor o reconheceu. */
+export class CepNotFoundError extends Error {}
 
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   if (!API_URL) {
@@ -21,7 +32,7 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
     });
 
     if (!response.ok) {
-      throw new ApiUnavailableError(`A API respondeu ${response.status}`);
+      throw new ApiUnavailableError(`A API respondeu ${response.status}`, response.status);
     }
 
     return (await response.json()) as T;
@@ -148,3 +159,56 @@ export const sendChatMessage = async (
       uf,
     }),
   }).then(parseChatResponse);
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+/**
+ * Resolve um CEP em origem aproximada. É o caminho de quem negou a
+ * localização: sem coordenada, a lista de unidades vinha na ordem do cadastro,
+ * sem nenhuma noção de proximidade.
+ *
+ * A precisão é do trecho da rua, ou do centro do município num CEP geral —
+ * suficiente para ordenar unidades, não para afirmar uma distância exata.
+ */
+export const lookupCep = async (cep: string): Promise<CepLocation> => {
+  const digits = cep.replace(/\D/g, '');
+  if (digits.length !== 8) {
+    throw new CepNotFoundError('Informe um CEP com oito dígitos.');
+  }
+
+  let payload: unknown;
+  try {
+    payload = await requestJson<unknown>(`/api/cep/${digits}`);
+  } catch (error) {
+    if (error instanceof ApiUnavailableError && error.status === 404) {
+      throw new CepNotFoundError('CEP não encontrado.');
+    }
+    throw error;
+  }
+
+  const candidate = payload as Partial<CepLocation>;
+  if (
+    typeof candidate?.cep !== 'string' ||
+    typeof candidate?.uf !== 'string' ||
+    typeof candidate?.city !== 'string' ||
+    !isFiniteNumber(candidate?.ufCode)
+  ) {
+    throw new ApiUnavailableError('Resposta de CEP em formato inesperado');
+  }
+
+  // Coordenada é opcional na origem: parte dos CEPs não tem ponto na base.
+  const hasPoint = isFiniteNumber(candidate.latitude) && isFiniteNumber(candidate.longitude);
+
+  return {
+    cep: candidate.cep,
+    uf: candidate.uf,
+    ufCode: candidate.ufCode,
+    city: candidate.city,
+    neighborhood: candidate.neighborhood ?? null,
+    street: candidate.street ?? null,
+    latitude: hasPoint ? (candidate.latitude as number) : null,
+    longitude: hasPoint ? (candidate.longitude as number) : null,
+    precision: candidate.precision ?? 'desconhecida',
+  };
+};
